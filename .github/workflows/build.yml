@@ -26,7 +26,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build and Release
+      - name: Build Electron App
         run: npm run electron:build
+
+      - name: Manual Release Upload
+        uses: softprops/action-gh-release@v2
+        with:
+          # 🌟 这里要根据你打包出来的实际文件名来改，或者用通配符
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+          tag_name: Manual_Build_${{ github.run_number }}
+          name: "LAX AI Engine V16 手动编译版 #${{ github.run_number }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
