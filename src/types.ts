@@ -9,6 +9,8 @@ export interface FixtureDefinition {
   channels: FixtureChannels;
 }
 
+export type FixturePosition = 'Floor_Left' | 'Floor_Right' | 'Ceiling_Left' | 'Ceiling_Right' | 'Wall_Left' | 'Wall_Right' | 'Center';
+
 export interface ActiveFixture {
   id: string;
   name: string;
@@ -16,6 +18,7 @@ export interface ActiveFixture {
   universe: number;
   addr: number;
   channels: FixtureChannels;
+  position: FixturePosition;
 }
 
 export interface EngineState {

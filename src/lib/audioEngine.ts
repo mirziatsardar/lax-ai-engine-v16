@@ -3,6 +3,7 @@ export class AudioEngine {
   private analyser: AnalyserNode | null = null;
   private microphone: MediaStreamAudioSourceNode | null = null;
   private dataArray: Uint8Array | null = null;
+  private currentStream: MediaStream | null = null;
   
   public bassHit = false;
   public trebleHit = false;
@@ -16,26 +17,49 @@ export class AudioEngine {
 
   constructor() {}
 
-  async start() {
+  async getDevices() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter(d => d.kind === 'audioinput');
+  }
+
+  async start(deviceId?: string) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Close existing
+      if (this.currentStream) {
+        this.currentStream.getTracks().forEach(t => t.stop());
+      }
+      if (this.audioContext) {
+        await this.audioContext.close();
+      }
+
+      const constraints: MediaStreamConstraints = { 
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true 
+      };
+      
+      this.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
       this.audioContext = new AudioContext();
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 2048;
+      this.analyser.smoothingTimeConstant = 0.8;
       
-      this.microphone = this.audioContext.createMediaStreamSource(stream);
+      this.microphone = this.audioContext.createMediaStreamSource(this.currentStream);
       this.microphone.connect(this.analyser);
       
       const bufferLength = this.analyser.frequencyBinCount;
       this.dataArray = new Uint8Array(bufferLength);
+      
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
     } catch (err) {
-      console.error("Microphone Access Error:", err);
+      console.error("Audio Engine Start Error:", err);
       throw err;
     }
   }
 
   process() {
-    if (!this.analyser || !this.dataArray) return;
+    if (!this.analyser || !this.dataArray || !this.audioContext) return;
+    if (this.audioContext.state === 'suspended') return;
     
     this.analyser.getByteFrequencyData(this.dataArray);
     
@@ -84,8 +108,8 @@ export class AudioEngine {
     }
     
     // CLIMAX DETECTION
-    const activeBands = Array.from(this.dataArray.slice(10, 300)).filter(v => v > 100).length;
-    this.climaxMode = (activeBands > 120 && this.energy > 0.15);
+    const activeBands = Array.from(this.dataArray.slice(10, 300)).filter(v => v > 150).length;
+    this.climaxMode = (activeBands > 160 && this.energy > 0.25);
   }
 
   getSpectrum() {

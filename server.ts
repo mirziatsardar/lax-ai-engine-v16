@@ -17,6 +17,16 @@ async function startServer() {
 
   const PORT = 3000;
   const udpClient = dgram.createSocket("udp4");
+  
+  // Explicitly allow broadcasting for Art-Net and sACN
+  udpClient.on('error', (err) => {
+    console.error("UDP Socket Error:", err);
+  });
+  
+  // Binding is needed to set options reliably on some systems
+  udpClient.bind(0, () => {
+    udpClient.setBroadcast(true);
+  });
 
   // Art-Net OpCode for ArtDmx is 0x5000 (Little Endian: 0x00, 0x50)
   // Art-Net header structure
