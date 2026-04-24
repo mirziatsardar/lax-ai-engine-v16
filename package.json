@@ -12,7 +12,7 @@
     "lint": "tsc --noEmit",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build:server": "esbuild server.ts --bundle --platform=node --outfile=dist-server/server.js --format=esm --external:vite --external:express --external:socket.io --external:dgram",
-    "electron:build": "npm run clean && npm run build && npm run electron:build:server && electron-builder"
+    "electron:build": "npm run clean && npm run build && npm run electron:build:server && electron-builder --publish always"
   },
   "build": {
     "appId": "com.lax.ai.engine",
@@ -20,6 +20,13 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mirziatsardar",
+        "repo": "lax-ai-engine-v16"
+      }
+    ],
     "files": [
       "dist/**/*",
       "dist-server/**/*",

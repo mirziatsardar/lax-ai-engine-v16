@@ -3,8 +3,8 @@ name: Build/Release Electron App
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   release:
@@ -21,21 +21,12 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          # 升级到满足要求的 Node 22
-          node-version: 22
-          cache: 'npm'
+          node-version: 20
 
       - name: Install dependencies
-        shell: bash
-        run: |
-          # 使用 --legacy-peer-deps 减少依赖冲突导致的卡顿
-          npm install --legacy-peer-deps
-        env:
-          ELECTRON_MIRROR: "https://github.com/mirziatsardar/lax-ai-engine-v16/edit/main/"
-       
+        run: npm install
 
       - name: Build and Release
         run: npm run electron:build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_MIRROR: "https://github.com/mirziatsardar/lax-ai-engine-v16/edit/main/"
