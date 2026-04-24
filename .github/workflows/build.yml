@@ -21,19 +21,21 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 升级到满足要求的 Node 22
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
         shell: bash
         run: |
-          npm install
+          # 使用 --legacy-peer-deps 减少依赖冲突导致的卡顿
+          npm install --legacy-peer-deps
         env:
-          # 必须包含完整路径，否则 electron 找不到二进制文件
-          ELECTRON_MIRROR: "/mirziatsardar/lax-ai-engine-v16/edit/main/"
+          ELECTRON_MIRROR: "https://github.com/mirziatsardar/lax-ai-engine-v16/edit/main/"
+       
 
       - name: Build and Release
         run: npm run electron:build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_MIRROR: "/mirziatsardar/lax-ai-engine-v16/edit/main/"
+          ELECTRON_MIRROR: "https://github.com/mirziatsardar/lax-ai-engine-v16/edit/main/"
