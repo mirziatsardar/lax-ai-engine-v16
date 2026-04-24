@@ -1,3 +1,19 @@
+name: Build/Release Electron App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+
     steps:
       - name: Check out git repository
         uses: actions/checkout@v4
@@ -6,21 +22,18 @@
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm' # 开启自动缓存，加速后续构建
+          cache: 'npm'
 
       - name: Install dependencies
         shell: bash
         run: |
-          # 针对 Windows 权限问题的预处理
-          npm config set fund false
           npm install
         env:
-          # 确保 Electron 走 GitHub 官方快速通道
+          # 必须包含完整路径，否则 electron 找不到二进制文件
           ELECTRON_MIRROR: "https://github.com"
 
       - name: Build and Release
         run: npm run electron:build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 某些打包工具也需要在 build 阶段设置此变量
           ELECTRON_MIRROR: "https://github.com"
