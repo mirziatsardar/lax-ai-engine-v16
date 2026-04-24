@@ -1,7 +1,9 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.3",
+  "author": "mirziatsardar",
+  "description": "LAX AI Intelligent Lighting Engine",
   "main": "electron.js",
   "type": "module",
   "scripts": {
@@ -34,10 +36,14 @@
       "package.json"
     ],
     "win": {
-      "target": "portable"
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
-    "mac": {
-      "target": "dmg"
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   },
   "dependencies": {
