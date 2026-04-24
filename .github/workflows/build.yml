@@ -30,10 +30,10 @@ jobs:
           npm install
         env:
           # 必须包含完整路径，否则 electron 找不到二进制文件
-          ELECTRON_MIRROR: "https://github.com"
+          ELECTRON_MIRROR: "/mirziatsardar/lax-ai-engine-v16/edit/main/"
 
       - name: Build and Release
         run: npm run electron:build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_MIRROR: "https://github.com"
+          ELECTRON_MIRROR: "/mirziatsardar/lax-ai-engine-v16/edit/main/"
