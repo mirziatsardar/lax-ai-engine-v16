@@ -1,0 +1,12 @@
+{
+  "name": "LAX AI Engine V16.0",
+  "description": "Neural Core Lighting Engine with real-time audio sensing, Art-Net protocol support, and advanced fixture array algorithms.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "Audio Processing",
+    "Real-time DMX Control",
+    "Hardware Integration"
+  ]
+}
