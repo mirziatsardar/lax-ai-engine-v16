@@ -26,20 +26,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Electron App
-        # 🌟 增加 --publish never 确保它只管打包，不在这里浪费时间尝试自动上传
-        run: npm run electron:build -- --publish never
-
-      - name: Publish to GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          # 🌟 核心：直接抓取打包生成的目录
-          files: |
-            release/*.exe
-            release/*.dmg
-            release/*.zip
-          tag_name: V16.0_${{ github.run_number }}
-          name: "LAX AI Engine V16.0 正式版 #${{ github.run_number }}"
-          body: "编译完成！这是最新的 Electron 架构安装包。"
+      - name: Build and Release
+        run: npm run electron:build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
