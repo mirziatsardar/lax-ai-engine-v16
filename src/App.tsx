@@ -216,11 +216,7 @@ export default function App() {
     ovrDimmer: 255,
     ovrPtSpeed: 0,
     ovrShutterLock: true,
-    ovrFrost: 0,
-    shutterBasePar: 0,
-    shutterBaseSpot: 255,
-    shutterStrobePar: 255,
-    shutterStrobeSpot: 200
+    ovrFrost: 0
   });
 
   const [activeTab, setActiveTab] = useState<'main' | 'patch' | 'settings'>('main');
@@ -232,10 +228,6 @@ export default function App() {
   useEffect(() => {
     socketRef.current = io();
     
-    socketRef.current.on("activity_log", (msg: string) => {
-      setLogs(prev => [msg, ...prev].slice(0, 5));
-    });
-
     // Load from local storage
     const saved = localStorage.getItem('lax_patch');
     if (saved) {
@@ -546,21 +538,6 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex-1 bg-black/60 border border-cyan/40 p-4 flex flex-col justify-center rounded-sm">
-                  <div className="text-[10px] text-[#00f2ff] uppercase mb-1 font-mono tracking-widest">Signal Monitor</div>
-                  <div className="space-y-1">
-                    {logs.length === 0 ? (
-                      <div className="text-[10px] text-cyan-900 font-mono italic">Waiting for signal...</div>
-                    ) : (
-                      logs.map((log, i) => (
-                        <div key={i} className="text-[10px] font-mono text-cyan-400 flex items-center gap-2 truncate">
-                          <span className={`w-1 h-1 rounded-full ${i === 0 ? 'bg-green-500 animate-ping' : 'bg-cyan-500/50'}`} />
-                          {log}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1 bg-black/60 border border-cyan/40 p-4 flex flex-col justify-center rounded-sm">
                   <div className="text-[10px] text-[#00f2ff] uppercase mb-1 font-mono tracking-widest">{t.interpolation}</div>
                   <div className="text-xs font-mono uppercase">
                     {t.lerp_damping}: <span className="text-[#f27d26]">{isRunning ? "0.82ms" : "IDLE"}</span>
@@ -694,15 +671,6 @@ export default function App() {
                 <InterventionSlider label={t.motor_damping} val={settings.ovrPtSpeed} max={255} onChange={v => setSettings(s => ({...s, ovrPtSpeed: v}))} />
                 <InterventionSlider label={t.frost} val={settings.ovrFrost} max={255} onChange={v => setSettings(s => ({...s, ovrFrost: v}))} />
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <InterventionSlider label="PAR基准" val={settings.shutterBasePar} max={255} onChange={v => setSettings(s => ({...s, shutterBasePar: v}))} />
-                  <InterventionSlider label="光束基准" val={settings.shutterBaseSpot} max={255} onChange={v => setSettings(s => ({...s, shutterBaseSpot: v}))} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <InterventionSlider label="PAR频闪" val={settings.shutterStrobePar} max={255} onChange={v => setSettings(s => ({...s, shutterStrobePar: v}))} />
-                  <InterventionSlider label="光束频闪" val={settings.shutterStrobeSpot} max={255} onChange={v => setSettings(s => ({...s, shutterStrobeSpot: v}))} />
-                </div>
-
                 <div className="pt-6 border-t border-cyan/10">
                    <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-mono uppercase text-gray-500">{t.target_vector}</span>
