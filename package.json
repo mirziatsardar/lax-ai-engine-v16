@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "author": "mirziatsardar",
   "description": "LAX AI Intelligent Lighting Engine",
   "main": "electron.js",
@@ -24,9 +24,7 @@
     },
     "publish": [
       {
-        "provider": "github",
-        "owner": "mirziatsardar",
-        "repo": "lax-ai-engine-v16"
+        "provider": "github"
       }
     ],
     "files": [
