@@ -25,8 +25,30 @@ function createWindow() {
   // Start the server logic
   if (app.isPackaged) {
     process.env.NODE_ENV = 'production';
-    import('./dist-server/server.js').catch(console.error);
-    mainWindow.loadURL('http://localhost:3000');
+    // Use spawn to start the server process for better isolation
+    const serverPath = path.join(__dirname, 'dist-server', 'server.js');
+    serverProcess = spawn('node', [serverPath], {
+      env: { ...process.env, NODE_ENV: 'production' }
+    });
+
+    serverProcess.stdout.on('data', (data) => {
+      console.log(`Server: ${data}`);
+      if (data.toString().includes('LAX AI ENGINE running')) {
+        mainWindow.loadURL('http://localhost:3000');
+      }
+    });
+
+    serverProcess.stderr.on('data', (data) => {
+      console.error(`Server Error: ${data}`);
+    });
+
+    // Fallback if log doesn't match
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.webContents.isLoading()) {
+        mainWindow.loadURL('http://localhost:3000');
+      }
+    }, 5000);
+    
   } else {
     // In development, we assume npm run dev is running
     mainWindow.loadURL('http://localhost:3000');

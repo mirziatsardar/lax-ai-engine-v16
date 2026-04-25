@@ -4,6 +4,10 @@ import { Server } from "socket.io";
 import path from "path";
 import dgram from "dgram";
 
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 async function startServer() {
   const app = express();
   const httpServer = createServer(app);
@@ -126,12 +130,29 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // In production, locate 'dist' relative to this bundled server file
+    // When bundled to dist-server/server.js, dist is at ../dist
+    const distPath = path.isAbsolute(process.env.DIST_PATH || "") 
+      ? process.env.DIST_PATH! 
+      : path.resolve(__dirname, process.env.NODE_ENV === "production" ? "../dist" : "dist");
+      
+    console.log(`Static files being served from: ${distPath}`);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexPath = path.join(distPath, "index.html");
+      console.log(`Serving index.html from: ${indexPath}`);
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error(`Error sending index.html: ${err.message}`);
+          res.status(404).send("Application files could not be located. Ensure 'dist' folder exists.");
+        }
+      });
     });
   }
+
+  httpServer.on('error', (err) => {
+    console.error("HTTP Server Error:", err);
+  });
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`LAX AI ENGINE running at http://localhost:${PORT}`);
