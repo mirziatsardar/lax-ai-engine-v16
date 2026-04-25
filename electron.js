@@ -34,9 +34,13 @@ function createWindow() {
     });
 
     serverProcess.stdout.on('data', (data) => {
-      console.log(`Server: ${data}`);
-      if (data.toString().includes('LAX AI ENGINE running')) {
-        mainWindow.loadURL('http://localhost:3000');
+      const output = data.toString();
+      console.log(`Server: ${output}`);
+      if (output.includes('LAX AI ENGINE running') || output.includes('READY_TO_CONNECT')) {
+        console.log("Server ready signal received. Loading URL...");
+        mainWindow.loadURL('http://localhost:3000').catch(err => {
+          console.error("Failed to load URL initially:", err);
+        });
       }
     });
 
@@ -44,14 +48,23 @@ function createWindow() {
       console.error(`Server Error: ${data}`);
     });
 
+    serverProcess.on('exit', (code) => {
+      console.log(`Server process exited with code ${code}`);
+      if (mainWindow) {
+        mainWindow.webContents.executeJavaScript(`document.body.innerHTML = '<div style="background:#050505;color:red;padding:50px;font-family:monospace;"><h1>BACKEND CRASH</h1><p>The DMX engine server exited with code ${code}. Check logs.</p></div>'`);
+      }
+    });
+
     // Fallback if log doesn't match
     setTimeout(() => {
       if (mainWindow && (mainWindow.webContents.getURL() === '' || mainWindow.webContents.getURL() === 'about:blank')) {
-        mainWindow.loadURL('http://localhost:3000').catch(() => {
-          console.log("Retrying server connection...");
+        console.log("Timeout waiting for server signal. Attempting fallback load...");
+        mainWindow.loadURL('http://localhost:3000').catch((err) => {
+          console.error("Fallback load failed:", err);
+          mainWindow.webContents.executeJavaScript(`document.body.innerHTML = '<div style="background:#050505;color:red;padding:50px;font-family:monospace;"><h1>CONNECTION FAILURE</h1><p>Could not connect to DMX engine at localhost:3000.</p><p>Error: ${err.message}</p></div>'`);
         });
       }
-    }, 3000);
+    }, 5000);
     
   } else {
     // In development, we assume npm run dev is running

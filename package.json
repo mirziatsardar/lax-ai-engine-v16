@@ -13,7 +13,7 @@
     "clean": "rm -rf dist dist-server",
     "lint": "tsc --noEmit",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build:server": "esbuild server.ts --bundle --platform=node --outfile=dist-server/server.js --format=esm --external:dgram",
+    "electron:build:server": "esbuild server.ts --bundle --platform=node --outfile=dist-server/server.js --format=esm --external:vite --external:dgram",
     "electron:build": "npm run clean && npm run build && npm run electron:build:server && electron-builder --publish always"
   },
   "build": {

@@ -154,19 +154,22 @@ async function startServer() {
   } else {
     // In production, locate 'dist' relative to this bundled server file
     // When bundled to dist-server/server.js, dist is at ../dist
-    const distPath = path.isAbsolute(process.env.DIST_PATH || "") 
-      ? process.env.DIST_PATH! 
-      : path.resolve(__dirname, process.env.NODE_ENV === "production" ? "../dist" : "dist");
+    const distPath = path.resolve(__dirname, "..", "dist");
       
-    console.log(`Static files being served from: ${distPath}`);
+    console.log(`[PROD] Server Directory: ${__dirname}`);
+    console.log(`[PROD] Looking for dist at: ${distPath}`);
+    
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       const indexPath = path.join(distPath, "index.html");
-      console.log(`Serving index.html from: ${indexPath}`);
       res.sendFile(indexPath, (err) => {
         if (err) {
-          console.error(`Error sending index.html: ${err.message}`);
-          res.status(404).send("Application files could not be located. Ensure 'dist' folder exists.");
+          console.error(`[CRITICAL] Failed to serve index.html from ${indexPath}: ${err.message}`);
+          res.status(404).send(`<html><body style="background:#050505;color:red;padding:20px;font-family:monospace;">
+            <h1>404: Application Not Found</h1>
+            <p>Static files could not be located at: ${indexPath}</p>
+            <p>Ensure the 'dist' folder exists in the application package.</p>
+          </body></html>`);
         }
       });
     });
