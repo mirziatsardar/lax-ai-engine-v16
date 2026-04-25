@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.0.9",
   "author": "mirziatsardar",
   "description": "LAX AI Intelligent Lighting Engine",
   "main": "electron.js",

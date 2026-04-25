@@ -195,6 +195,7 @@ export default function App() {
   const dmxEngine = useMemo(() => new DMXEngine(), []);
   const socketRef = useRef<Socket | null>(null);
   const rafRef = useRef<number | null>(null);
+  const lastEmitTimeRef = useRef<number>(0);
   
   // States from engine
   const [bassHit, setBassHit] = useState(false);
@@ -348,15 +349,20 @@ export default function App() {
         settings
       );
 
-      // Send to server
-      Object.entries(universes).forEach(([uni, buffer]) => {
-        socketRef.current?.emit("dmx_frame", {
-          universe: parseInt(uni),
-          buffer: buffer,
-          protocol: protocol,
-          targetIp: (targetIp === "Multicast" || targetIp === "Broadcast") ? undefined : targetIp
+      // Throttled sending (~40fps)
+      const nowMs = performance.now();
+      
+      if (nowMs - lastEmitTimeRef.current >= 25) {
+        Object.entries(universes).forEach(([uni, buffer]) => {
+          socketRef.current?.emit("dmx_frame", {
+            universe: parseInt(uni),
+            buffer: buffer,
+            protocol: protocol,
+            targetIp: (targetIp === "Multicast" || targetIp === "Broadcast") ? undefined : targetIp
+          });
         });
-      });
+        lastEmitTimeRef.current = nowMs;
+      }
 
       rafRef.current = requestAnimationFrame(loop);
     };
