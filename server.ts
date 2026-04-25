@@ -25,29 +25,47 @@ async function startServer() {
     console.error("UDP Socket Error:", err);
   });
   
-  udpClient.bind(0, () => {
+  udpClient.bind(0, "0.0.0.0", () => {
     udpClient.setBroadcast(true);
+    udpClient.setMulticastTTL(64);
+    udpClient.setMulticastLoopback(true);
     console.log("UDP DMX Relay Socket Ready");
   });
 
   const sacnSequences: Record<number, number> = {};
+  let totalPacketsSent = 0;
 
   io.on("connection", (socket) => {
     console.log("DMX Engine Link Established:", socket.id);
+    socket.emit("activity_log", "Connection established with DMX Engine.");
 
     socket.on("dmx_frame", (data: { universe: number; buffer: number[]; targetIp?: string; protocol?: string }) => {
       try {
         const dmxBuffer = Buffer.from(data.buffer);
         const protocol = data.protocol || "Art-Net";
-        const target = data.targetIp || (protocol === "Art-Net" ? "255.255.255.255" : `239.255.${Math.floor(data.universe / 256)}.${data.universe % 256}`);
         
+        // Match Python's target selection precisely
+        let target = data.targetIp;
+        if (!target || target.toLowerCase() === "multicast" || target.toLowerCase() === "broadcast" || target === "") {
+          if (protocol === "Art-Net") {
+            target = "255.255.255.255";
+          } else {
+            // Standard sACN Multicast: 239.255.msb.lsb
+            const hi = Math.floor(data.universe / 256);
+            const lo = data.universe % 256;
+            target = `239.255.${hi}.${lo}`;
+          }
+        }
+
         if (protocol === "Art-Net") {
+          // Exactly as python: b'Art-Net\x00' + OpCode(0x5000 LE) + ProtVer(14 BE) + Seq(0) + Phys(0) + Uni(LE) + Len(512 BE)
           const artnetPacket = Buffer.alloc(18 + 512);
           artnetPacket.write("Art-Net\0", 0);
           artnetPacket.writeUInt16LE(0x5000, 8);
           artnetPacket.writeUInt16BE(14, 10);
-          artnetPacket.writeUInt8(0, 12);
-          artnetPacket.writeUInt8(0, 13);
+          artnetPacket.writeUInt8(0, 12); // Sequence
+          artnetPacket.writeUInt8(0, 13); // Physical
+          
           const outputUni = data.universe > 0 ? data.universe - 1 : 0;
           artnetPacket.writeUInt16LE(outputUni, 14);
           artnetPacket.writeUInt16BE(512, 16);
@@ -65,14 +83,14 @@ async function startServer() {
           sacnPacket.writeUInt32BE(0x00000004, 18);
           
           const cid = Buffer.alloc(16);
-          cid.write("LAX-AI-V16-NODE", 0);
+          cid.write("LAX-AI-V16-ENG", 0);
           cid.copy(sacnPacket, 22);
 
           sacnPacket.writeUInt16BE(0x7000 | (totalLen - 38), 38);
           sacnPacket.writeUInt32BE(0x00000002, 40);
           sacnPacket.write("LAX AI ENGINE V16".padEnd(32, "\0"), 44);
           sacnPacket.writeUInt8(100, 76);
-          sacnPacket.writeUInt16BE(0, 77);
+          sacnPacket.writeUInt16BE(0, 77); // Sync Address
           
           const seq = (sacnSequences[data.universe] || 0);
           sacnPacket.writeUInt8(seq, 79);
@@ -87,13 +105,20 @@ async function startServer() {
           sacnPacket.writeUInt16BE(0x0000, 119);
           sacnPacket.writeUInt16BE(0x0001, 121);
           sacnPacket.writeUInt16BE(513, 123);
-          sacnPacket.writeUInt8(0, 125);
+          sacnPacket.writeUInt8(0x00, 125);
           dmxBuffer.copy(sacnPacket, 126);
 
           udpClient.send(sacnPacket, 5568, target);
         }
+
+        totalPacketsSent++;
+        if (totalPacketsSent % 200 === 0) {
+          socket.emit("activity_log", `Relayed ${totalPacketsSent} packets. Last to: ${target}`);
+        }
       } catch (err) {
-        console.error("DMX Frame Processing Error:", err);
+        if (err instanceof Error) {
+          socket.emit("activity_log", `Error: ${err.message}`);
+        }
       }
     });
 

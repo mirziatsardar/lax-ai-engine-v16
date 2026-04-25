@@ -228,6 +228,10 @@ export default function App() {
   useEffect(() => {
     socketRef.current = io();
     
+    socketRef.current.on("activity_log", (msg: string) => {
+      setLogs(prev => [msg, ...prev].slice(0, 5));
+    });
+
     // Load from local storage
     const saved = localStorage.getItem('lax_patch');
     if (saved) {
@@ -534,6 +538,21 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="text-xs font-mono text-gray-600">{t.null_patch}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 bg-black/60 border border-cyan/40 p-4 flex flex-col justify-center rounded-sm">
+                  <div className="text-[10px] text-[#00f2ff] uppercase mb-1 font-mono tracking-widest">Signal Monitor</div>
+                  <div className="space-y-1">
+                    {logs.length === 0 ? (
+                      <div className="text-[10px] text-cyan-900 font-mono italic">Waiting for signal...</div>
+                    ) : (
+                      logs.map((log, i) => (
+                        <div key={i} className="text-[10px] font-mono text-cyan-400 flex items-center gap-2">
+                          <span className="w-1 h-1 rounded-full bg-cyan-500 animate-pulse" />
+                          {log}
+                        </div>
+                      ))
                     )}
                   </div>
                 </div>
