@@ -35,12 +35,40 @@ async function startServer() {
   io.on("connection", (socket) => {
     console.log("DMX Engine Link Established:", socket.id);
 
-    socket.on("dmx_frame", (data: { universe: number; buffer: number[]; targetIp?: string; protocol?: string }) => {
+    socket.on("dmx_frame", (data: { 
+      universe: number; 
+      buffer: number[]; 
+      targetIp?: string; 
+      protocol?: string;
+      sacnMulticast?: string;
+      interface?: string
+    }) => {
       try {
         const dmxBuffer = Buffer.from(data.buffer);
         const protocol = data.protocol || "Art-Net";
-        const target = data.targetIp || (protocol === "Art-Net" ? "255.255.255.255" : `239.255.${Math.floor(data.universe / 256)}.${data.universe % 256}`);
         
+        let target = data.targetIp;
+        if (!target) {
+          if (protocol === "Art-Net") {
+            target = "255.255.255.255";
+          } else {
+            // sACN Multicast: prefer user-defined, then fallback to standard formula
+            target = data.sacnMulticast || `239.255.${Math.floor(data.universe / 256)}.${data.universe % 256}`;
+          }
+        }
+        
+        // Handle interface selection for multicast if supported and provided
+        if (data.interface && data.interface !== "Default") {
+          try {
+            // Note: In real scenarios, setMulticastInterface expects an IP or index.
+            // Simplified here to demonstrate usage of the UI field.
+            if (data.interface.includes('.')) {
+              udpClient.setMulticastInterface(data.interface);
+            }
+          } catch (e) {
+            // Silent fail if interface is invalid or not found
+          }
+        }
         if (protocol === "Art-Net") {
           const artnetPacket = Buffer.alloc(18 + 512);
           artnetPacket.write("Art-Net\0", 0);

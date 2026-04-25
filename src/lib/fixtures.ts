@@ -1,4 +1,4 @@
-import { FixtureDefinition } from './types';
+import { FixtureDefinition } from '../types';
 
 export const MASTER_FIXTURES: Record<string, FixtureDefinition> = {
   "WWY - 16CH295 (295W 光束灯/三合一)": {

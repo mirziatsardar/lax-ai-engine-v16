@@ -30,20 +30,27 @@ export class DMXEngine {
       ovrPtSpeed: number;
       ovrShutterLock: boolean;
       ovrFrost: number;
-    }
+    },
+    isSilence: boolean = false
   ): Record<number, number[]> {
     const universes: Record<number, number[]> = {};
     
+    // If silence, we don't advance phase or patterns (optional, but keep it frozen/dead)
+    const effectiveEnergy = isSilence ? 0 : energy;
+    const effectiveBassHit = isSilence ? false : bassHit;
+
     // Dynamic Speed based on energy and climax
-    const dynamicSpeed = (energy < 0.03 ? 0.5 : (1.5 + energy * 12.0)) * (climaxMode ? 2.5 : 1.0);
-    this.currentPhase += dynamicSpeed * delta;
-    this.patternTimer += delta * (climaxMode ? 3 : 1);
+    const dynamicSpeed = (effectiveEnergy < 0.03 ? 0.5 : (1.5 + effectiveEnergy * 12.0)) * (climaxMode ? 2.5 : 1.0);
+    if (!isSilence) {
+      this.currentPhase += dynamicSpeed * delta;
+      this.patternTimer += delta * (climaxMode ? 3 : 1);
+    }
     
     if (this.strobeTimer > 0) this.strobeTimer -= delta;
     
     // Automatic Pattern Switching (on Beat or Timer)
-    if (bassHit || this.patternTimer > 6) {
-      if (bassHit) this.beatCounter++;
+    if (effectiveBassHit || (this.patternTimer > 6 && !isSilence)) {
+      if (effectiveBassHit) this.beatCounter++;
       this.strobeTimer = 0.15;
       this.patternTimer = 0;
       
@@ -135,7 +142,7 @@ export class DMXEngine {
       }
 
       state.dimmer += (targetDimmer - state.dimmer) * 0.3;
-      const finalDimmer = energy < 0.005 ? 0 : Math.min(settings.ovrDimmer, Math.floor(state.dimmer));
+      const finalDimmer = (effectiveEnergy < 0.005 || isSilence) ? 0 : Math.min(settings.ovrDimmer, Math.floor(state.dimmer));
 
       // Shutter
       let finalShutter = 255;

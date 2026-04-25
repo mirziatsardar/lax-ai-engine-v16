@@ -9,13 +9,29 @@ export class AudioEngine {
   public trebleHit = false;
   public climaxMode = false;
   public energy = 0;
+  public isSilence = true;
   
   private lastBassTime = 0;
   private lastTrebleTime = 0;
+  private silenceStartTime = Date.now();
   private bassHistory: number[] = [];
   private trebleHistory: number[] = [];
 
+  // Manual Controls
+  public sensitivity = 1.0;
+  public threshold = 50; // 0-255 base threshold
+  public bassThresholdMult = 2.0; // multiplier for adaptive
+  public silenceThreshold = 0.005; // energy threshold for silence
+  public silenceDelay = 1500; // ms before blackout
+
   constructor() {}
+
+  public resetHistory() {
+    this.bassHistory = [];
+    this.trebleHistory = [];
+    this.lastBassTime = 0;
+    this.lastTrebleTime = 0;
+  }
 
   async getDevices() {
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -66,24 +82,37 @@ export class AudioEngine {
     // Calculate Energy
     let total = 0;
     for (let i = 0; i < this.dataArray.length; i++) {
-      total += this.dataArray[i];
+       // Apply sensitivity to data before processing
+       const val = Math.min(255, this.dataArray[i] * this.sensitivity);
+       total += val;
+       this.dataArray[i] = val; // Store modified for spectrum
     }
     this.energy = total / this.dataArray.length / 255;
     
     const now = Date.now();
+
+    // Silence Detection
+    if (this.energy > this.silenceThreshold) {
+      this.silenceStartTime = now;
+      this.isSilence = false;
+    } else {
+      if (now - this.silenceStartTime > this.silenceDelay) {
+        this.isSilence = true;
+      }
+    }
     
     // BASS (60Hz - 150Hz)
-    // Bin = (freq * fftSize) / sampleRate
-    // e.g. (60 * 2048) / 44100 = ~2.8 -> Bin 3
-    // (150 * 2048) / 44100 = ~6.9 -> Bin 7
     const bassBins = this.dataArray.slice(3, 8);
     const bassEnergy = Array.from(bassBins).reduce((a, b) => a + b, 0) / bassBins.length;
     
     this.bassHistory.push(bassEnergy);
-    if (this.bassHistory.length > 30) this.bassHistory.shift();
+    if (this.bassHistory.length > 40) this.bassHistory.shift();
     const avgBass = this.bassHistory.reduce((a, b) => a + b, 0) / this.bassHistory.length;
     
-    if (bassEnergy > avgBass * 3.0 && bassEnergy > 50 && now - this.lastBassTime > 300) {
+    // Improved Hit Logic: Base threshold + adaptive buffer
+    const dynamicBassThreshold = Math.max(this.threshold, avgBass * this.bassThresholdMult);
+    
+    if (bassEnergy > dynamicBassThreshold && now - this.lastBassTime > 250) {
       this.bassHit = true;
       this.lastBassTime = now;
     } else {
@@ -91,16 +120,16 @@ export class AudioEngine {
     }
     
     // TREBLE (2kHz - 8kHz)
-    // (2000 * 2048) / 44100 = ~92
-    // (8000 * 2048) / 44100 = ~371
     const trebleBins = this.dataArray.slice(92, 371);
     const trebleEnergy = Math.max(...Array.from(trebleBins));
     
     this.trebleHistory.push(trebleEnergy);
-    if (this.trebleHistory.length > 20) this.trebleHistory.shift();
+    if (this.trebleHistory.length > 30) this.trebleHistory.shift();
     const avgTreble = this.trebleHistory.reduce((a, b) => a + b, 0) / this.trebleHistory.length;
     
-    if (trebleEnergy > avgTreble * 1.6 && trebleEnergy > 10 && now - this.lastTrebleTime > 150) {
+    const dynamicTrebleThreshold = Math.max(this.threshold * 0.4, avgTreble * 1.5);
+    
+    if (trebleEnergy > dynamicTrebleThreshold && now - this.lastTrebleTime > 150) {
       this.trebleHit = true;
       this.lastTrebleTime = now;
     } else {
@@ -109,7 +138,7 @@ export class AudioEngine {
     
     // CLIMAX DETECTION
     const activeBands = Array.from(this.dataArray.slice(10, 300)).filter(v => v > 150).length;
-    this.climaxMode = (activeBands > 160 && this.energy > 0.25);
+    this.climaxMode = (activeBands > 160 && this.energy > 0.2);
   }
 
   getSpectrum() {

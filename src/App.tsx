@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Zap, 
@@ -45,8 +45,12 @@ const translations = {
     fixture_patch: "Fixture Patch",
     engine_cfg: "Engine Cfg",
     audio_sensing: "Audio Sensing Logic",
-    bass: "Bass (60Hz-150Hz)",
-    treble: "Treble (2kHz-8kHz)",
+    bass: "Bass (Low Freq)",
+    treble: "Treble (High Freq)",
+    sensitivity: "Mic Sensitivity",
+    threshold: "Hit Threshold",
+    silence_blackout: "Silence Blackout (Auto)",
+    silence_active: "SILENCE DETECTED: BLACKOUT ENABLED",
     climax_mode: "Climax Mode (狂暴模式)",
     active_at_energy: "ACTIVE AT HIGH ENERGY",
     normal_op: "Normal Operation",
@@ -81,6 +85,8 @@ const translations = {
     frost: "Atmospheric Frost",
     target_vector: "Output Protocol Vector",
     target_ip: "Target IP (Unicast/Multicast)",
+    multicast_addr: "sACN Multicast Address",
+    net_interface: "Network Interface / NIC",
     movement_array: "Movement Array",
     phase_offsets: "Phase Offsets",
     engine_stream: "Engine_Log_Stream",
@@ -117,8 +123,12 @@ const translations = {
     fixture_patch: "灯具配接",
     engine_cfg: "引擎设置",
     audio_sensing: "音频感应逻辑",
-    bass: "低音 (60Hz-150Hz)",
-    treble: "高音 (2kHz-8kHz)",
+    bass: "低音 (频段触发)",
+    treble: "高音 (频段触发)",
+    sensitivity: "麦克风增益/灵敏度",
+    threshold: "触发阈值 (灵敏度门限)",
+    silence_blackout: "无声自动闭光",
+    silence_active: "检测到无声: 自动闭光激活",
     climax_mode: "狂暴模式 (CLIMAX)",
     active_at_energy: "能量激发中",
     normal_op: "正常运行",
@@ -153,6 +163,8 @@ const translations = {
     frost: "雾化效果",
     target_vector: "输出协议矢量",
     target_ip: "目标 IP (单播/组播)",
+    multicast_addr: "sACN 组播地址",
+    net_interface: "网卡接口选择",
     movement_array: "动作矩阵",
     phase_offsets: "相位偏移",
     engine_stream: "引擎日志流",
@@ -185,6 +197,8 @@ export default function App() {
   const [logs, setLogs] = useState<string[]>(["[OK] NEURAL CORE V16.0 STABLE"]);
   const [protocol, setProtocol] = useState("Art-Net");
   const [targetIp, setTargetIp] = useState("Broadcast");
+  const [networkInterface, setNetworkInterface] = useState("Default");
+  const [sacnMulticast, setSacnMulticast] = useState("239.255.0.1");
   const [spectrumData, setSpectrumData] = useState(new Uint8Array(30));
   
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
@@ -201,6 +215,12 @@ export default function App() {
   const [bassHit, setBassHit] = useState(false);
   const [trebleHit, setTrebleHit] = useState(false);
   const [climaxMode, setClimaxMode] = useState(false);
+  const [isSilence, setIsSilence] = useState(true);
+
+  // Audio manual controls
+  const [audioSensitivity, setAudioSensitivity] = useState(1.0);
+  const [audioThreshold, setAudioThreshold] = useState(50);
+  const [audioAdaptiveMult, setAudioAdaptiveMult] = useState(2.0);
 
   // Dynamic Engine Stats
   const [engineState, setEngineState] = useState({
@@ -334,11 +354,17 @@ export default function App() {
       const delta = (now - lastTime) / 1000;
       lastTime = now;
 
+      // Sync sensitivity/threshold settings to audioEngine
+      audioEngine.sensitivity = audioSensitivity;
+      audioEngine.threshold = audioThreshold;
+      audioEngine.bassThresholdMult = audioAdaptiveMult;
+
       audioEngine.process();
       setSpectrumData(audioEngine.getSpectrum());
       setBassHit(audioEngine.bassHit);
       setTrebleHit(audioEngine.trebleHit);
       setClimaxMode(audioEngine.climaxMode);
+      setIsSilence(audioEngine.isSilence);
 
       const universes = dmxEngine.update(
         fixtures, 
@@ -346,7 +372,8 @@ export default function App() {
         audioEngine.bassHit, 
         audioEngine.climaxMode, 
         delta,
-        settings
+        settings,
+        audioEngine.isSilence
       );
 
       // Throttled sending (~40fps)
@@ -358,7 +385,9 @@ export default function App() {
             universe: parseInt(uni),
             buffer: buffer,
             protocol: protocol,
-            targetIp: (targetIp === "Multicast" || targetIp === "Broadcast") ? undefined : targetIp
+            targetIp: (targetIp === "Multicast" || targetIp === "Broadcast") ? undefined : targetIp,
+            sacnMulticast: protocol === "sACN" ? sacnMulticast : undefined,
+            interface: networkInterface !== "Default" ? networkInterface : undefined
           });
         });
         lastEmitTimeRef.current = nowMs;
@@ -374,7 +403,7 @@ export default function App() {
     if (!fixDef) return;
 
     const newFix: ActiveFixture[] = [];
-    const chCount = Math.max(...Object.values(fixDef.channels));
+    const chCount = Math.max(...Object.values(fixDef.channels) as number[]);
     
     for (let i = 0; i < count; i++) {
       const addr = startAddr + (i * chCount);
@@ -451,8 +480,70 @@ export default function App() {
               <AudioBar label={t.bass} active={bassHit} color={ORANGE} val={bassHit ? 85 : 10} suffix="3.5x Trigger" />
               <AudioBar label={t.treble} active={trebleHit} color={CYAN} val={trebleHit ? 70 : 15} suffix="Dynamic" />
               
-              <div className="pt-4 mt-4 border-t border-cyan/10">
+              <div className="space-y-4 pt-4 border-t border-cyan/10">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px] uppercase font-mono text-gray-500">
+                    <span>{t.sensitivity}</span>
+                    <span className="text-[#00f2ff]">{(audioSensitivity * 100).toFixed(0)}%</span>
+                  </div>
+                  <input 
+                    type="range" min="0.1" max="10.0" step="0.1" 
+                    value={audioSensitivity} 
+                    onChange={e => setAudioSensitivity(parseFloat(e.target.value))}
+                    className="w-full accent-[#00f2ff] opacity-60 h-1"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px] uppercase font-mono text-gray-500">
+                    <span>{t.threshold}</span>
+                    <span className="text-[#00f2ff]">{audioThreshold}</span>
+                  </div>
+                  <input 
+                    type="range" min="0" max="200" step="1" 
+                    value={audioThreshold} 
+                    onChange={e => setAudioThreshold(parseInt(e.target.value))}
+                    className="w-full accent-[#00f2ff] opacity-60 h-1"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px] uppercase font-mono text-gray-500">
+                    <span>Adaptive Buffer</span>
+                    <span className="text-[#00f2ff]">{audioAdaptiveMult.toFixed(1)}x</span>
+                  </div>
+                  <input 
+                    type="range" min="1.0" max="5.0" step="0.1" 
+                    value={audioAdaptiveMult} 
+                    onChange={e => setAudioAdaptiveMult(parseFloat(e.target.value))}
+                    className="w-full accent-[#00f2ff] opacity-60 h-1"
+                  />
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setAudioSensitivity(1.0);
+                    setAudioThreshold(50);
+                    setAudioAdaptiveMult(2.0);
+                    audioEngine.resetHistory();
+                  }}
+                  className="w-full py-1 border border-cyan/20 text-[9px] font-mono text-gray-500 hover:bg-cyan/10 hover:text-cyan-400 transition-all uppercase"
+                >
+                  Reset Logic (重置逻辑)
+                </button>
+              </div>
+
+              <div className="pt-4 border-t border-cyan/10">
                 <AnimatePresence>
+                  {isSilence && isRunning && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="text-[9px] font-mono text-[#ff0044] mb-2 animate-pulse"
+                    >
+                      [ {t.silence_active} ]
+                    </motion.div>
+                  )}
                   {climaxMode ? (
                     <motion.div 
                       key="climax"
@@ -526,7 +617,7 @@ export default function App() {
                   <div className="flex gap-6 overflow-x-auto">
                     {fixtures.length > 0 ? (
                       <div className="flex gap-4">
-                        {Array.from(new Set(fixtures.map(f => f.type))).map(type => (
+                        {(Array.from(new Set(fixtures.map(f => f.type))) as string[]).map(type => (
                           <div key={type} className="text-xs font-mono whitespace-nowrap">
                             {type.toUpperCase()} <span className="text-[#f27d26]">x{fixtures.filter(f => f.type === type).length}</span>
                           </div>
@@ -699,6 +790,43 @@ export default function App() {
                        </button>
                      </div>
                    </Field>
+
+                   {protocol === "sACN" && (
+                     <motion.div 
+                       initial={{ opacity: 0, height: 0 }}
+                       animate={{ opacity: 1, height: 'auto' }}
+                       className="space-y-4 pt-4 border-t border-cyan/10"
+                     >
+                       <Field label={t.multicast_addr}>
+                         <div className="flex gap-2">
+                           <input 
+                             value={sacnMulticast} 
+                             onChange={e => setSacnMulticast(e.target.value)}
+                             className="flex-1 bg-black/50 border border-cyan/30 p-2 text-xs font-mono text-[#00f2ff] outline-none"
+                             placeholder="239.255.x.x"
+                           />
+                           <button 
+                            onClick={() => setSacnMulticast("239.255.0.1")}
+                            className="px-2 border border-cyan/30 text-[9px] hover:bg-cyan/10"
+                           >
+                            RESET
+                           </button>
+                         </div>
+                       </Field>
+                       <Field label={t.net_interface}>
+                         <select 
+                           value={networkInterface}
+                           onChange={e => setNetworkInterface(e.target.value)}
+                           className="w-full bg-black/50 border border-cyan/30 p-2 text-xs font-mono text-[#00f2ff] outline-none"
+                         >
+                           <option value="Default">System Default</option>
+                           <option value="127.0.0.1">Localhost (127.0.0.1)</option>
+                           <option value="Ethernet">Ethernet (Auto-Detect)</option>
+                           <option value="Wi-Fi">Wireless (Auto-Detect)</option>
+                         </select>
+                       </Field>
+                     </motion.div>
+                   )}
                 </div>
               </div>
             </div>
