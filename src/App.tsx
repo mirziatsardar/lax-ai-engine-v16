@@ -216,7 +216,11 @@ export default function App() {
     ovrDimmer: 255,
     ovrPtSpeed: 0,
     ovrShutterLock: true,
-    ovrFrost: 0
+    ovrFrost: 0,
+    shutterBasePar: 0,
+    shutterBaseSpot: 255,
+    shutterStrobePar: 255,
+    shutterStrobeSpot: 200
   });
 
   const [activeTab, setActiveTab] = useState<'main' | 'patch' | 'settings'>('main');
@@ -690,6 +694,15 @@ export default function App() {
                 <InterventionSlider label={t.motor_damping} val={settings.ovrPtSpeed} max={255} onChange={v => setSettings(s => ({...s, ovrPtSpeed: v}))} />
                 <InterventionSlider label={t.frost} val={settings.ovrFrost} max={255} onChange={v => setSettings(s => ({...s, ovrFrost: v}))} />
                 
+                <div className="grid grid-cols-2 gap-4">
+                  <InterventionSlider label="PAR基准" val={settings.shutterBasePar} max={255} onChange={v => setSettings(s => ({...s, shutterBasePar: v}))} />
+                  <InterventionSlider label="光束基准" val={settings.shutterBaseSpot} max={255} onChange={v => setSettings(s => ({...s, shutterBaseSpot: v}))} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <InterventionSlider label="PAR频闪" val={settings.shutterStrobePar} max={255} onChange={v => setSettings(s => ({...s, shutterStrobePar: v}))} />
+                  <InterventionSlider label="光束频闪" val={settings.shutterStrobeSpot} max={255} onChange={v => setSettings(s => ({...s, shutterStrobeSpot: v}))} />
+                </div>
+
                 <div className="pt-6 border-t border-cyan/10">
                    <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-mono uppercase text-gray-500">{t.target_vector}</span>

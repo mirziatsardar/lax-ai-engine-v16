@@ -30,6 +30,10 @@ export class DMXEngine {
       ovrPtSpeed: number;
       ovrShutterLock: boolean;
       ovrFrost: number;
+      shutterBasePar: number;
+      shutterBaseSpot: number;
+      shutterStrobePar: number;
+      shutterStrobeSpot: number;
     }
   ): Record<number, number[]> {
     const universes: Record<number, number[]> = {};
@@ -138,11 +142,13 @@ export class DMXEngine {
       const finalDimmer = energy < 0.005 ? 0 : Math.min(settings.ovrDimmer, Math.floor(state.dimmer));
 
       // Shutter
-      let finalShutter = 255;
-      if (settings.ovrShutterLock) {
-        finalShutter = fix.type === 'par' ? 0 : 255;
-      } else {
-        finalShutter = this.strobeTimer > 0 ? (fix.type === 'par' ? 255 : 200) : (fix.type === 'par' ? 0 : 255);
+      const isPar = fix.type === 'par' || fix.type === 'wash';
+      const baseShutter = isPar ? settings.shutterBasePar : settings.shutterBaseSpot;
+      const strobeShutter = isPar ? settings.shutterStrobePar : settings.shutterStrobeSpot;
+
+      let finalShutter = baseShutter;
+      if (!settings.ovrShutterLock && this.strobeTimer > 0) {
+        finalShutter = strobeShutter;
       }
 
       // Color Logic

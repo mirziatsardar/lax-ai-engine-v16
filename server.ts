@@ -83,12 +83,16 @@ async function startServer() {
           sacnPacket.writeUInt32BE(0x00000004, 18);
           
           const cid = Buffer.alloc(16);
-          cid.write("LAX-AI-V16-ENG", 0);
+          cid.write("LAX-AI-V16-ENGINE", 0); // 16 bytes GUID (placeholder)
           cid.copy(sacnPacket, 22);
 
           sacnPacket.writeUInt16BE(0x7000 | (totalLen - 38), 38);
           sacnPacket.writeUInt32BE(0x00000002, 40);
-          sacnPacket.write("LAX AI ENGINE V16".padEnd(32, "\0"), 44);
+          
+          const sourceName = Buffer.alloc(32);
+          sourceName.write("LAX AI ENGINE V16", 0);
+          sourceName.copy(sacnPacket, 44);
+          
           sacnPacket.writeUInt8(100, 76);
           sacnPacket.writeUInt16BE(0, 77); // Sync Address
           
