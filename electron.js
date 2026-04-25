@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
+import { spawn, fork } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,10 +25,12 @@ function createWindow() {
   // Start the server logic
   if (app.isPackaged) {
     process.env.NODE_ENV = 'production';
-    // Use spawn to start the server process for better isolation
+    // Use fork instead of spawn node to avoid ENOENT errors on systems without node in PATH
     const serverPath = path.join(__dirname, 'dist-server', 'server.js');
-    serverProcess = spawn('node', [serverPath], {
-      env: { ...process.env, NODE_ENV: 'production' }
+    
+    serverProcess = fork(serverPath, [], {
+      env: { ...process.env, NODE_ENV: 'production' },
+      stdio: 'pipe'
     });
 
     serverProcess.stdout.on('data', (data) => {
@@ -44,10 +46,12 @@ function createWindow() {
 
     // Fallback if log doesn't match
     setTimeout(() => {
-      if (mainWindow && !mainWindow.webContents.isLoading()) {
-        mainWindow.loadURL('http://localhost:3000');
+      if (mainWindow && (mainWindow.webContents.getURL() === '' || mainWindow.webContents.getURL() === 'about:blank')) {
+        mainWindow.loadURL('http://localhost:3000').catch(() => {
+          console.log("Retrying server connection...");
+        });
       }
-    }, 5000);
+    }, 3000);
     
   } else {
     // In development, we assume npm run dev is running
