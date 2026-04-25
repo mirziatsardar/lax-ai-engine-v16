@@ -552,8 +552,8 @@ export default function App() {
                       <div className="text-[10px] text-cyan-900 font-mono italic">Waiting for signal...</div>
                     ) : (
                       logs.map((log, i) => (
-                        <div key={i} className="text-[10px] font-mono text-cyan-400 flex items-center gap-2">
-                          <span className="w-1 h-1 rounded-full bg-cyan-500 animate-pulse" />
+                        <div key={i} className="text-[10px] font-mono text-cyan-400 flex items-center gap-2 truncate">
+                          <span className={`w-1 h-1 rounded-full ${i === 0 ? 'bg-green-500 animate-ping' : 'bg-cyan-500/50'}`} />
                           {log}
                         </div>
                       ))

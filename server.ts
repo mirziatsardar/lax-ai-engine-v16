@@ -26,9 +26,13 @@ async function startServer() {
   });
   
   udpClient.bind(0, "0.0.0.0", () => {
-    udpClient.setBroadcast(true);
-    udpClient.setMulticastTTL(64);
-    udpClient.setMulticastLoopback(true);
+    try {
+      udpClient.setBroadcast(true);
+      udpClient.setMulticastTTL(64);
+      udpClient.setMulticastLoopback(true);
+    } catch (e) {
+      console.warn("UDP Socket setting warning (non-fatal):", e);
+    }
     console.log("UDP DMX Relay Socket Ready");
   });
 
@@ -82,8 +86,7 @@ async function startServer() {
           sacnPacket.writeUInt16BE(0x7000 | (totalLen - 16), 16);
           sacnPacket.writeUInt32BE(0x00000004, 18);
           
-          const cid = Buffer.alloc(16);
-          cid.write("LAX-AI-V16-ENGINE", 0); // 16 bytes GUID (placeholder)
+          const cid = Buffer.from([0x4c, 0x41, 0x58, 0x41, 0x49, 0x56, 0x31, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]);
           cid.copy(sacnPacket, 22);
 
           sacnPacket.writeUInt16BE(0x7000 | (totalLen - 38), 38);
@@ -175,6 +178,7 @@ async function startServer() {
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`LAX AI ENGINE running at http://localhost:${PORT}`);
+    console.log("READY_TO_CONNECT");
   });
 }
 
