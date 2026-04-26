@@ -54,16 +54,17 @@ async function startServer() {
         const protocol = data.protocol || "Art-Net";
         
         let target = data.targetIp;
-        if (!target) {
+        if (!target || target.toLowerCase() === "multicast" || target.toLowerCase() === "broadcast") {
           if (protocol === "Art-Net") {
             target = "255.255.255.255";
           } else {
-            // Standard sACN Multicast address formula
             const h = Math.floor(data.universe / 256);
             const l = data.universe % 256;
             target = `239.255.${h}.${l}`;
           }
         }
+        
+        console.log(`DMX Frame: Protocol=${protocol}, Universe=${data.universe}, Target=${target}`);
         
         if (data.interface && data.interface !== "Default") {
           try {

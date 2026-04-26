@@ -44,6 +44,8 @@ const translations = {
     neural_core: "Neural Core",
     fixture_patch: "Fixture Patch",
     engine_cfg: "Engine Cfg",
+    audio_tab: "Audio Logic",
+    logs_tab: "Engine Logs",
     audio_sensing: "Audio Sensing Logic",
     bass: "Bass (Low Freq)",
     treble: "Treble (High Freq)",
@@ -123,6 +125,8 @@ const translations = {
     neural_core: "神经核心",
     fixture_patch: "灯具配接",
     engine_cfg: "引擎设置",
+    audio_tab: "音频逻辑",
+    logs_tab: "运行日志",
     audio_sensing: "音频感应逻辑",
     bass: "低音 (频段触发)",
     treble: "高音 (频段触发)",
@@ -243,7 +247,7 @@ export default function App() {
     ovrShutterSpot: 255
   });
 
-  const [activeTab, setActiveTab] = useState<'main' | 'patch' | 'settings'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'patch' | 'settings' | 'audio' | 'logs'>('main');
 
   const addLog = (msg: string) => {
     setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 10));
@@ -484,98 +488,48 @@ export default function App() {
             <div className="flex flex-col gap-2">
               <NavButton label={t.neural_core} icon={<Activity size={14}/>} active={activeTab === 'main'} onClick={() => setActiveTab('main')} />
               <NavButton label={t.fixture_patch} icon={<Box size={14}/>} active={activeTab === 'patch'} onClick={() => setActiveTab('patch')} />
+              <NavButton label={t.audio_tab} icon={<Radio size={14}/>} active={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
+              <NavButton label={t.logs_tab} icon={<Database size={14}/>} active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
               <NavButton label={t.engine_cfg} icon={<Settings size={14}/>} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
             </div>
           </div>
 
           <div className="bg-black/60 border border-cyan/30 p-4 flex-1 rounded-sm overflow-hidden flex flex-col">
-            <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mb-4 border-b border-cyan/20 pb-2">{t.audio_sensing}</h3>
-            <div className="space-y-6 overflow-y-auto pr-1">
-              <AudioBar label={t.bass} active={bassHit} color={ORANGE} val={bassHit ? 85 : 10} suffix="3.5x Trigger" />
-              <AudioBar label={t.treble} active={trebleHit} color={CYAN} val={trebleHit ? 70 : 15} suffix="Dynamic" />
-              
-              <div className="space-y-4 pt-4 border-t border-cyan/10">
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[9px] uppercase font-mono text-gray-500">
-                    <span>{t.sensitivity}</span>
-                    <span className="text-[#00f2ff]">{(audioSensitivity * 100).toFixed(0)}%</span>
-                  </div>
-                  <input 
-                    type="range" min="0.1" max="10.0" step="0.1" 
-                    value={audioSensitivity} 
-                    onChange={e => setAudioSensitivity(parseFloat(e.target.value))}
-                    className="w-full accent-[#00f2ff] opacity-60 h-1"
-                  />
+            <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mb-4 border-b border-cyan/20 pb-2">Operational Context</h3>
+            <div className="space-y-4 overflow-y-auto pr-1">
+              <div className="p-3 border border-cyan/10 bg-cyan/5 rounded flex flex-col gap-2">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-gray-500 uppercase">Input Stream</span>
+                  <span className={isRunning ? "text-green-500" : "text-red-500"}>{isRunning ? "LIVE" : "OFFLINE"}</span>
                 </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[9px] uppercase font-mono text-gray-500">
-                    <span>{t.threshold}</span>
-                    <span className="text-[#00f2ff]">{audioThreshold}</span>
-                  </div>
-                  <input 
-                    type="range" min="0" max="200" step="1" 
-                    value={audioThreshold} 
-                    onChange={e => setAudioThreshold(parseInt(e.target.value))}
-                    className="w-full accent-[#00f2ff] opacity-60 h-1"
-                  />
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-gray-500 uppercase">Audio Sync</span>
+                  <span className={isSilence ? "text-red-500" : "text-cyan-400"}>{isSilence ? "SILENT" : "DETECTED"}</span>
                 </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[9px] uppercase font-mono text-gray-500">
-                    <span>Adaptive Buffer</span>
-                    <span className="text-[#00f2ff]">{audioAdaptiveMult.toFixed(1)}x</span>
-                  </div>
-                  <input 
-                    type="range" min="1.0" max="5.0" step="0.1" 
-                    value={audioAdaptiveMult} 
-                    onChange={e => setAudioAdaptiveMult(parseFloat(e.target.value))}
-                    className="w-full accent-[#00f2ff] opacity-60 h-1"
-                  />
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-gray-500 uppercase">Climax State</span>
+                  <span className={climaxMode ? "text-pink-500" : "text-gray-600"}>{climaxMode ? "BURST" : "STABLE"}</span>
                 </div>
-
-                <button 
-                  onClick={() => {
-                    setAudioSensitivity(1.0);
-                    setAudioThreshold(50);
-                    setAudioAdaptiveMult(2.0);
-                    audioEngine.resetHistory();
-                  }}
-                  className="w-full py-1 border border-cyan/20 text-[9px] font-mono text-gray-500 hover:bg-cyan/10 hover:text-cyan-400 transition-all uppercase"
-                >
-                  Reset Logic (重置逻辑)
-                </button>
               </div>
 
-              <div className="pt-4 border-t border-cyan/10">
-                <AnimatePresence>
-                  {isSilence && isRunning && (
-                    <motion.div 
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="text-[9px] font-mono text-[#ff0044] mb-2 animate-pulse"
-                    >
-                      [ {t.silence_active} ]
-                    </motion.div>
-                  )}
-                  {climaxMode ? (
-                    <motion.div 
-                      key="climax"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      className="p-3 climax-pulse bg-[#ff0044]/10 rounded flex flex-col items-center gap-1"
-                    >
-                      <span className="text-[10px] font-bold text-[#ff0044] uppercase tracking-tighter">{t.climax_mode}</span>
-                      <span className="text-[9px] text-[#ff0044]/80 font-mono italic">{t.active_at_energy}</span>
-                    </motion.div>
-                  ) : (
-                    <div className="p-3 border border-dashed border-cyan/10 rounded flex flex-col items-center gap-1 opacity-20">
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">{t.normal_op}</span>
-                      <span className="text-[9px] text-gray-600 font-mono italic">{t.awaiting_climax}</span>
-                    </div>
-                  )}
-                </AnimatePresence>
+              <div className="pt-2">
+                <div className="text-[9px] text-gray-500 uppercase mb-2 font-mono tracking-widest font-bold">Quick Engine Stats</div>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="p-2 bg-black/40 border border-cyan/10 flex justify-between">
+                    <span className="text-[8px] text-gray-500 uppercase">Movement</span>
+                    <span className="text-[9px] text-[#39ff14] font-mono uppercase">{engineState.move}</span>
+                  </div>
+                  <div className="p-2 bg-black/40 border border-cyan/10 flex justify-between">
+                    <span className="text-[8px] text-gray-500 uppercase">Pattern</span>
+                    <span className="text-[9px] text-cyan-400 font-mono uppercase">{engineState.dimmer}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-auto pt-4 border-t border-cyan/10">
+                <div className="text-[8px] text-gray-600 uppercase font-mono italic leading-tight">
+                  Neural Core utilizes FFT spectral analysis and adaptive peak detection to sync DMX vectors.
+                </div>
               </div>
             </div>
           </div>
@@ -584,16 +538,8 @@ export default function App() {
             <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mb-4">{t.engine_status}</h3>
             <div className="grid grid-cols-2 gap-2 mb-4">
               <div className="p-2 bg-black/40 border border-cyan/10">
-                <span className="text-[8px] text-gray-500 uppercase block mb-1">Movement</span>
-                <span className="text-[9px] text-[#39ff14] font-mono uppercase">{engineState.move}</span>
-              </div>
-              <div className="p-2 bg-black/40 border border-cyan/10">
                 <span className="text-[8px] text-gray-500 uppercase block mb-1">Color Dynamic</span>
                 <span className="text-[9px] text-[#ff00ff] font-mono uppercase">{engineState.color}</span>
-              </div>
-              <div className="p-2 bg-black/40 border border-cyan/10">
-                <span className="text-[8px] text-gray-500 uppercase block mb-1">Dimmer Logic</span>
-                <span className="text-[9px] text-cyan-400 font-mono uppercase">{engineState.dimmer}</span>
               </div>
               <div className="p-2 bg-black/40 border border-cyan/10">
                 <span className="text-[8px] text-gray-500 uppercase block mb-1">Phase Sync</span>
@@ -611,27 +557,7 @@ export default function App() {
                 {settings.ovrShutterLock ? t.locked : t.unlocked}
               </span>
             </button>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-               <div>
-                  <span className="text-[8px] text-gray-500 uppercase block mb-1">Par/Wash Base: {settings.ovrShutterPW}</span>
-                  <input 
-                    type="range" min="0" max="255" step="1" 
-                    value={settings.ovrShutterPW} 
-                    onChange={e => setSettings(s => ({ ...s, ovrShutterPW: parseInt(e.target.value) }))}
-                    className="w-full accent-cyan-400/50"
-                  />
-               </div>
-               <div>
-                  <span className="text-[8px] text-gray-500 uppercase block mb-1">Beam Base: {settings.ovrShutterSpot}</span>
-                  <input 
-                    type="range" min="0" max="255" step="1" 
-                    value={settings.ovrShutterSpot} 
-                    onChange={e => setSettings(s => ({ ...s, ovrShutterSpot: parseInt(e.target.value) }))}
-                    className="w-full accent-orange-400/50"
-                  />
-               </div>
-            </div>
-            <div className="text-[9px] text-gray-500 leading-relaxed font-mono">
+            <div className="text-[9px] text-gray-500 leading-relaxed font-mono opacity-50">
               {t.shutter_note}
             </div>
           </div>
@@ -641,7 +567,7 @@ export default function App() {
         <section className="flex-1 flex flex-col gap-6 min-w-0">
           {activeTab === 'main' ? (
             <>
-              <div className="bg-black/80 border border-cyan/70 p-6 flex-1 rounded-sm flex flex-col relative">
+              <div className="bg-black/80 border border-cyan/70 p-6 flex-1 rounded-sm flex flex-col relative overflow-hidden">
                 <div className="absolute top-4 right-4 flex gap-2 z-20">
                   <div className="px-2 py-1 bg-[#00f2ff]/10 border border-[#00f2ff]/30 text-[9px] font-mono text-[#00f2ff]">30 BANDS FFT</div>
                   <div className="px-2 py-1 bg-[#f27d26]/10 border border-[#f27d26]/30 text-[9px] font-mono text-[#f27d26]">60 FPS</div>
@@ -691,6 +617,110 @@ export default function App() {
                 </div>
               </div>
             </>
+          ) : activeTab === 'audio' ? (
+            <div className="bg-black/80 border border-cyan/70 p-6 flex-1 rounded-sm overflow-auto">
+              <h2 className="text-xs uppercase tracking-[0.3em] font-mono text-[#00f2ff] mb-8 border-b border-cyan/20 pb-4">{t.audio_tab}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                <div className="space-y-8">
+                  <AudioBar label={t.bass} active={bassHit} color={ORANGE} val={bassHit ? 85 : 10} suffix="3.5x Multiplier" />
+                  <AudioBar label={t.treble} active={trebleHit} color={CYAN} val={trebleHit ? 70 : 15} suffix="Dynamic Detect" />
+                  
+                  <div className="pt-6 border-t border-cyan/10">
+                    <Field label={t.audio_input}>
+                      <select 
+                        value={selectedDeviceId}
+                        onChange={(e) => {
+                          setSelectedDeviceId(e.target.value);
+                          if (isRunning) toggleEngine().then(() => toggleEngine());
+                        }}
+                        className="w-full bg-black/50 border border-cyan/30 p-2 text-xs font-mono text-[#39FF14] outline-none"
+                      >
+                        {audioDevices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || `Device ${d.deviceId.slice(0, 5)}`}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] uppercase font-mono text-gray-500">
+                      <span>{t.sensitivity}</span>
+                      <span className="text-[#00f2ff]">{(audioSensitivity * 100).toFixed(0)}%</span>
+                    </div>
+                    <input 
+                      type="range" min="0.1" max="10.0" step="0.1" 
+                      value={audioSensitivity} 
+                      onChange={e => setAudioSensitivity(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-gray-900 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] uppercase font-mono text-gray-500">
+                      <span>{t.threshold}</span>
+                      <span className="text-[#00f2ff]">{audioThreshold}</span>
+                    </div>
+                    <input 
+                      type="range" min="0" max="255" step="1" 
+                      value={audioThreshold} 
+                      onChange={e => setAudioThreshold(parseInt(e.target.value))}
+                      className="w-full h-2 bg-gray-900 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] uppercase font-mono text-gray-500">
+                      <span>Adaptive Mult</span>
+                      <span className="text-[#00f2ff]">{audioAdaptiveMult.toFixed(1)}x</span>
+                    </div>
+                    <input 
+                      type="range" min="1.0" max="5.0" step="0.1" 
+                      value={audioAdaptiveMult} 
+                      onChange={e => setAudioAdaptiveMult(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-gray-900 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      setAudioSensitivity(1.0);
+                      setAudioThreshold(50);
+                      setAudioAdaptiveMult(2.0);
+                      audioEngine.resetHistory();
+                    }}
+                    className="w-full py-3 bg-red-900/10 border border-red-500/30 text-red-500 font-mono text-xs uppercase tracking-[.2em] hover:bg-red-500 hover:text-black transition-all"
+                  >
+                    RESET AUDIO LOGIC
+                  </button>
+
+                  <div className="p-4 border border-cyan/20 bg-cyan/5 rounded-sm">
+                    <div className="text-[10px] font-mono text-gray-400 mb-2 uppercase">Status Highlights</div>
+                    <div className="space-y-2">
+                       <div className={`text-[11px] font-mono ${isSilence ? "text-red-500" : "text-gray-500"}`}>
+                        SILENCE_MODE: {isSilence ? "ACTIVE [BLACKOUT]" : "NOMINAL"}
+                      </div>
+                      <div className={`text-[11px] font-mono ${climaxMode ? "text-pink-500" : "text-gray-500"}`}>
+                        CLIMAX_BURST: {climaxMode ? "ENGAGED [X1.8 SPEED]" : "WAITING"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : activeTab === 'logs' ? (
+            <div className="bg-black/80 border border-cyan/70 p-6 flex-1 rounded-sm flex flex-col font-mono">
+               <h2 className="text-xs uppercase tracking-[0.3em] font-mono text-[#00f2ff] mb-4 border-b border-cyan/20 pb-4">{t.logs_tab}</h2>
+               <div className="flex-1 overflow-auto bg-black/40 p-4 border border-cyan/10">
+                  {logs.map((log, i) => (
+                    <div key={i} className="text-[11px] py-1 border-b border-white/5 last:border-0">
+                      <span className="text-cyan-800 mr-2">[{i}]</span>
+                      <span className={log.includes("ERROR") ? "text-red-500" : log.includes("ENGAGED") ? "text-green-400" : "text-cyan-400/80"}>
+                        {log}
+                      </span>
+                    </div>
+                  ))}
+               </div>
+            </div>
           ) : activeTab === 'patch' ? (
             <div className="bg-black/80 border border-cyan/70 p-6 flex-1 rounded-sm overflow-auto">
               <h2 className="text-xs uppercase tracking-[0.3em] font-mono text-[#00f2ff] mb-8 border-b border-cyan/20 pb-4">{t.matrix_patching}</h2>
