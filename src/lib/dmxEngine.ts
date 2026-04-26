@@ -46,32 +46,37 @@ export class DMXEngine {
 
     // Python Logic: Dynamic Speed
     // dynamic_speed = 0.5 if is_chill_mode else (1.5 + ambient_energy * 10.0)
-    const isChillMode = effectiveEnergy < 0.03;
-    let dynamicSpeed = isChillMode ? 0.5 : (1.5 + effectiveEnergy * 10.0);
+    const isChillMode = effectiveEnergy < 0.05;
+    // Make speed scale heavily with energy so fast music = fast movement
+    let dynamicSpeed = isChillMode ? 0.5 : (2.0 + effectiveEnergy * 15.0);
     if (climaxMode) dynamicSpeed *= 1.8;
     
     if (!isSilence) {
       this.currentPhase += dynamicSpeed * delta;
-      this.patternTimer += delta; // In python it doesn't seem to scale with climax for pure timer
+      this.patternTimer += delta;
     }
     
     if (this.strobeTimer > 0) this.strobeTimer -= delta;
     
-    // Treble Logic -> Gobo Change
+    // Treble Logic -> Gobo Change (打搽声换图案)
     if (effectiveTrebleHit) {
-      this.goboIdx = (this.goboIdx + 1) % 10; // Python says % 6, but we have more gobos usually
+      this.goboIdx = (this.goboIdx + 1) % 15; // Cycle through more patterns
     }
 
     // Bass Logic -> Color Change & Strobe Trigger
     if (effectiveBassHit) {
       this.beatCounter++;
       this.colorIdx = (this.colorIdx + 1) % 8;
-      this.strobeTimer = 0.15; // 0.15s strobe life from Python
       
-      const switchThreshold = climaxMode ? 2 : 8; // Python switches patterns every 8 (normal) or 2 (climax) beats
+      // Keep flash duration short for punchy sync
+      this.strobeTimer = 0.15; 
+      
+      // Random AI mode switches effects based on climax
+      const switchThreshold = climaxMode ? 4 : 8; 
       
       if (this.isRandomMode && this.beatCounter % switchThreshold === 0) {
         this.currentMove = (["sweep", "wave", "circle", "symmetry", "fan", "cross"] as MovementMode[])[Math.floor(Math.random() * 6)];
+        // Add random mode variations for color and dimmer so it doesn't look monotonous
         this.currentColor = (["sync", "rainbow", "chase"] as AdvancedColorMode[])[Math.floor(Math.random() * 3)];
         this.currentDimmerMode = (["sync", "pulse", "stack"] as DimmerMode[])[Math.floor(Math.random() * 3)];
         this.currentPhaseMode = (["uniform", "odd_even_offset", "gradient"] as PhaseMode[])[Math.floor(Math.random() * 3)];
@@ -159,37 +164,46 @@ export class DMXEngine {
         }
       }
 
-      // Dimmer Logic from Python
+      // Dimmer Logic 
       let targetDimmer = 255;
       if (!isSilence) {
-        if (this.currentDimmerMode === "pulse") {
-          targetDimmer = Math.floor(Math.abs(Math.sin(this.currentPhase * 1.5 + phaseOffset)) * 255);
-        } else if (this.currentDimmerMode === "stack") {
-          const activeCount = Math.floor((this.currentPhase * 2) % (totalOfType + 2));
-          targetDimmer = idx <= activeCount ? 255 : 0;
+        if (!settings.ovrShutterLock) {
+          // Unlocked: Flash exactly on the beat! (strobe)
+          targetDimmer = (this.strobeTimer > 0) ? 255 : 0;
+          state.dimmer = targetDimmer; // Instant jump, no lerp for punchy flash
+        } else {
+          // Locked: Follow Dimmer Mode
+          if (this.currentDimmerMode === "pulse") {
+            targetDimmer = Math.floor(Math.abs(Math.sin(this.currentPhase * 1.5 + phaseOffset)) * 255);
+          } else if (this.currentDimmerMode === "stack") {
+            const activeCount = Math.floor((this.currentPhase * 2) % (totalOfType + 2));
+            targetDimmer = idx <= activeCount ? 255 : 0;
+          }
         }
       } else {
         targetDimmer = 0;
       }
       
-      state.dimmer += (targetDimmer - state.dimmer) * 0.2;
+      // Lerp dimmer if we are not in hard flash mode
+      if (settings.ovrShutterLock || isSilence) {
+        state.dimmer += (targetDimmer - state.dimmer) * 0.2;
+      }
+      
       const finalDimmer = Math.max(0, Math.min(settings.ovrDimmer, Math.floor(state.dimmer)));
 
-      // Shutter / Strobe Logic from Python
+      // Shutter Logic
       let finalShutter = 255;
       const baseShutter = fix.type === 'par' || fix.type === 'wash' 
         ? (settings.ovrShutterPW ?? 0) 
         : (settings.ovrShutterSpot ?? 255);
-      
-      const strobeShutter = fix.type === 'par' || fix.type === 'wash' ? 200 : 250;
 
       if (isSilence) {
         finalShutter = baseShutter;
-      } else if (settings.ovrShutterLock) {
-        finalShutter = baseShutter;
-      } else if (this.strobeTimer > 0) {
-        finalShutter = strobeShutter;
+      } else if (!settings.ovrShutterLock) {
+        // Force shutter to 0 if not strobing to ensure complete blackout on beat sync
+        finalShutter = (this.strobeTimer > 0) ? baseShutter : 0;
       } else {
+        // Locked: keep it normal
         finalShutter = baseShutter;
       }
 

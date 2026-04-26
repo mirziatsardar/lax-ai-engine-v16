@@ -79,15 +79,16 @@ export class AudioEngine {
     
     this.analyser.getByteFrequencyData(this.dataArray);
     
-    // Calculate Energy
+    // Calculate Energy - Only use lower half of spectrum (most music energy is < 11kHz)
+    const validBins = Math.floor(this.dataArray.length / 2);
     let total = 0;
-    for (let i = 0; i < this.dataArray.length; i++) {
-       // Apply sensitivity to data before processing
+    for (let i = 0; i < validBins; i++) {
        const val = Math.min(255, this.dataArray[i] * this.sensitivity);
        total += val;
-       this.dataArray[i] = val; // Store modified for spectrum
+       this.dataArray[i] = val;
     }
-    this.energy = total / this.dataArray.length / 255;
+    // Boost energy calculation so it actually scales well between 0.0 and 1.0
+    this.energy = (total / validBins / 255) * 1.5; 
     
     const now = Date.now();
 
@@ -101,30 +102,27 @@ export class AudioEngine {
       }
     }
     
-    // BASS (60Hz - 150Hz approx)
-    const bassBins = this.dataArray.slice(3, 8);
+    // BASS (60Hz - 250Hz approx, bins 3 to 12 for 44.1k/2048)
+    const bassBins = this.dataArray.slice(3, 12);
     const bassEnergy = Array.from(bassBins).reduce((a, b) => a + b, 0) / bassBins.length;
     
     this.bassHistory.push(bassEnergy);
-    if (this.bassHistory.length > 30) this.bassHistory.shift(); // Python uses 30
+    if (this.bassHistory.length > 30) this.bassHistory.shift(); 
     const avgBass = this.bassHistory.reduce((a, b) => a + b, 0) / this.bassHistory.length;
     
-    // Improved Hit Logic: Base threshold + adaptive buffer
-    // Python: bass_energy > avg_bass * 3.5 and bass_energy > 2.5
-    // Note: Python uses normalized floats, we use 0-255. 2.5 might be around 50-100 in 0-255 scale.
-    // We'll use 3.5 as the multiplier if it's not manually overriden to something else.
-    const dynamicBassThreshold = Math.max(this.threshold, avgBass * this.bassThresholdMult);
+    // Hit Logic: More sensitive by requiring just a peak over the average
+    const dynamicBassThreshold = Math.max(this.threshold * 0.8, avgBass * this.bassThresholdMult);
     
-    if (bassEnergy > dynamicBassThreshold && now - this.lastBassTime > 300) { // Python uses 0.3s cooldown
+    // Fast cooldown 250ms for punchy bass
+    if (bassEnergy > dynamicBassThreshold && bassEnergy > 30 && now - this.lastBassTime > 250) { 
       this.bassHit = true;
       this.lastBassTime = now;
     } else {
       this.bassHit = false;
     }
     
-    // TREBLE (2kHz - 8kHz approx)
-    // Bins 100 to 350 for 44.1k/2048
-    const trebleBins = this.dataArray.slice(100, 350);
+    // TREBLE (High Hats / Snares, typically bins 100 to 400)
+    const trebleBins = this.dataArray.slice(150, 400);
     const trebleEnergy = Math.max(...Array.from(trebleBins));
     
     this.trebleHistory.push(trebleEnergy);

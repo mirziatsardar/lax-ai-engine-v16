@@ -104,6 +104,31 @@ const translations = {
       Wall_Right: "Wall R",
       Center: "Center"
     },
+    modes: {
+      movement: {
+        sweep: "Tilt/Pan Sweep",
+        wave: "Wave",
+        circle: "Circle",
+        symmetry: "Symmetrical",
+        fan: "Fan",
+        cross: "Cross/Symmetrical"
+      },
+      color: {
+        sync: "Sync",
+        rainbow: "Rainbow",
+        chase: "Color Chase"
+      },
+      dimmer: {
+        sync: "Sync",
+        pulse: "Pulse",
+        stack: "Stack/Build"
+      },
+      phase: {
+        uniform: "Uniform",
+        odd_even_offset: "Odd/Even Toggle",
+        gradient: "Gradient Wave"
+      }
+    },
     dimmer_array: "Dimmer Array",
     color_array: "Color Array",
     random_mode: "AI Random Mode",
@@ -184,6 +209,31 @@ const translations = {
       Wall_Left: "墙面左",
       Wall_Right: "墙面右",
       Center: "中心"
+    },
+    modes: {
+      movement: {
+        sweep: "扫射 (Tilt/Pan Sweep)",
+        wave: "波浪 (Wave)",
+        circle: "圆圈 (Circle)",
+        symmetry: "对称",
+        fan: "扇形 (Fan)",
+        cross: "对射 (Cross)"
+      },
+      color: {
+        sync: "同步",
+        rainbow: "彩虹 (Rainbow)",
+        chase: "颜色流水 (Color Chase)"
+      },
+      dimmer: {
+        sync: "同步",
+        pulse: "脉冲 (Pulse)",
+        stack: "堆叠 (Stack/Build)"
+      },
+      phase: {
+        uniform: "一致 (Phase 0)",
+        odd_even_offset: "奇偶交替 (Toggle 180)",
+        gradient: "渐变相位 (Gradient)"
+      }
     },
     dimmer_array: "调光矩阵",
     color_array: "颜色矩阵",
@@ -966,7 +1016,7 @@ export default function App() {
                   }}
                   className={`w-full text-left p-2 transition-all ${dmxEngine.currentMove === m ? "bg-[#00f2ff]/20 text-[#00f2ff] border-l-2 border-[#00f2ff]" : "opacity-30 hover:bg-white/5"}`}
                 >
-                  {m.toUpperCase()}
+                  {t.modes.movement[m]}
                 </button>
               ))}
 
@@ -980,7 +1030,7 @@ export default function App() {
                   }}
                   className={`w-full text-left p-1.5 transition-all ${dmxEngine.currentDimmerMode === d ? "text-[#f27d26]" : "opacity-30"}`}
                 >
-                  {d.toUpperCase()}
+                  {t.modes.dimmer[d]}
                 </button>
               ))}
 
@@ -994,7 +1044,7 @@ export default function App() {
                   }}
                   className={`w-full text-left p-1.5 transition-all ${dmxEngine.currentColor === c ? "text-[#39FF14]" : "opacity-30"}`}
                 >
-                  {c.toUpperCase()}
+                  {t.modes.color[c]}
                 </button>
               ))}
             </div>
@@ -1009,7 +1059,7 @@ export default function App() {
                   }}
                   className={`p-2 border transition-all text-left ${dmxEngine.currentPhaseMode === p ? "border-[#00f2ff] bg-cyan/10 text-cyan-400" : "border-cyan/20 text-gray-500 opacity-60"}`}
                 >
-                  {p.replace('_offset', '').toUpperCase()}
+                  {t.modes.phase[p]}
                 </button>
               ))}
             </div>
