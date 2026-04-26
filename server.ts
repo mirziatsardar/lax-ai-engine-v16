@@ -21,18 +21,24 @@ async function startServer() {
   const PORT = 3000;
   const udpClient = dgram.createSocket("udp4");
   
-  udpClient.on('error', (err) => {
-    console.error("UDP Socket Error:", err);
-  });
-  
-  udpClient.bind(0, () => {
+  // Art-Net and sACN controllers should ideally send from standard ports
+  udpClient.bind(6454, "0.0.0.0", () => {
     udpClient.setBroadcast(true);
     try {
       // sACN Multicast needs a higher TTL to jump through routers/switches
-      udpClient.setMulticastTTL(32);
+      udpClient.setMulticastTTL(64);
       udpClient.setMulticastLoopback(true);
     } catch(e) { /* Some OS might not allow this without admin */ }
-    console.log("UDP DMX Relay Socket Ready");
+    console.log("UDP DMX Relay Socket Active on Port 6454");
+  });
+
+  udpClient.on('error', (err) => {
+    if ((err as any).code === 'EADDRINUSE') {
+      console.log("Port 6454 in use, falling back to ephemeral port...");
+      udpClient.bind(0);
+    } else {
+      console.error("UDP Socket Error:", err);
+    }
   });
 
   const sacnSequences: Record<number, number> = {};
@@ -54,13 +60,18 @@ async function startServer() {
         const protocol = data.protocol || "Art-Net";
         
         let target = data.targetIp;
-        if (!target || target.toLowerCase() === "multicast" || target.toLowerCase() === "broadcast") {
+        if (!target || target.toLowerCase() === "multicast" || target.toLowerCase() === "broadcast" || target.toLowerCase() === "0.0.0.0") {
           if (protocol === "Art-Net") {
             target = "255.255.255.255";
           } else {
-            const h = Math.floor(data.universe / 256);
-            const l = data.universe % 256;
-            target = `239.255.${h}.${l}`;
+            // User defined local multicast or default ACN formula
+            if (data.sacnMulticast && data.sacnMulticast !== "239.255.0.1") {
+               target = data.sacnMulticast;
+            } else {
+               const h = Math.floor(data.universe / 256);
+               const l = data.universe % 256;
+               target = `239.255.${h}.${l}`;
+            }
           }
         }
         
@@ -93,39 +104,40 @@ async function startServer() {
 
           udpClient.send(artnetPacket, 6454, target);
         } else if (protocol === "sACN") {
-          // ANSI E1.31-2016 Compliant Header
+          // ANSI E1.31-2016 Compliant Header (Total 126 bytes header + 512 data)
           const sacnPacket = Buffer.alloc(126 + 512);
+          const totalLength = sacnPacket.length; // 638
           
           // Root Layer (38 bytes)
-          sacnPacket.writeUInt16BE(0x0010, 0); // Preamble Size
-          sacnPacket.writeUInt16BE(0x0000, 2); // Postamble Size
-          sacnPacket.write("ASC-E1.17\0\0\0", 4); // ACN Packet ID
-          sacnPacket.writeUInt16BE(0x7000 | (638 - 16), 16); // Flags and Length (Root Layer)
-          sacnPacket.writeUInt32BE(0x00000004, 18); // Root Vector (Root Packet)
-          CID.copy(sacnPacket, 22); // CID
+          sacnPacket.writeUInt16BE(0x0010, 0); 
+          sacnPacket.writeUInt16BE(0x0000, 2); 
+          sacnPacket.write("ASC-E1.17\0\0\0", 4);
+          sacnPacket.writeUInt16BE(0x7000 | (totalLength - 16), 16); 
+          sacnPacket.writeUInt32BE(0x00000004, 18);
+          CID.copy(sacnPacket, 22);
 
-          // E1.31 Framing Layer (77 bytes)
-          sacnPacket.writeUInt16BE(0x7000 | (638 - 38), 38); // Flags and Length (Framing Layer)
-          sacnPacket.writeUInt32BE(0x00000002, 40); // E1.31 Vector
-          sacnPacket.write("LAX-AI-ENGINE-V16".padEnd(32, "\0"), 44); // Source Name
-          sacnPacket.writeUInt8(100, 76); // Priority
-          sacnPacket.writeUInt16BE(0x0000, 77); // Synchronization Address (0 = ignore)
+          // Framing Layer (77 bytes)
+          sacnPacket.writeUInt16BE(0x7000 | (totalLength - 38), 38);
+          sacnPacket.writeUInt32BE(0x00000002, 40);
+          sacnPacket.write("LAX-AI-ENGINE-V16-ACN".padEnd(64, "\0"), 44); // Source Name (64 bytes)
+          sacnPacket.writeUInt8(100, 108); // Priority (at 44+64=108)
+          sacnPacket.writeUInt16BE(0, 109); // Sync Address (2 bytes)
           
           const seq = (sacnSequences[data.universe] || 0);
-          sacnPacket.writeUInt8(seq, 79); // Sequence Number
+          sacnPacket.writeUInt8(seq, 111); // Sequence (1 byte)
           sacnSequences[data.universe] = (seq + 1) % 256;
           
-          sacnPacket.writeUInt8(0, 80); // Options (bit 6 = preview, bit 7 = stream terminated)
-          sacnPacket.writeUInt16BE(data.universe, 81); // Universe
+          sacnPacket.writeUInt8(0, 112); // Options (1 byte)
+          sacnPacket.writeUInt16BE(data.universe, 113); // Universe (2 bytes)
 
           // DMP Layer (43 bytes)
-          sacnPacket.writeUInt16BE(0x7000 | (638 - 115), 115); // Flags and Length (DMP Layer)
-          sacnPacket.writeUInt8(0x02, 117); // DMP Vector (Set Property Values)
+          sacnPacket.writeUInt16BE(0x7000 | (totalLength - 115), 115);
+          sacnPacket.writeUInt8(0x02, 117); // DMP Vector
           sacnPacket.writeUInt8(0xa1, 118); // Address Type & Data Type
           sacnPacket.writeUInt16BE(0x0000, 119); // First Property Address
           sacnPacket.writeUInt16BE(0x0001, 121); // Address Increment
           sacnPacket.writeUInt16BE(513, 123); // Property Value Count (1 start code + 512 channels)
-          sacnPacket.writeUInt8(0, 125); // DMX Start Code (0xFF for DMX)
+          sacnPacket.writeUInt8(0, 125); // DMX Start Code
           
           dmxBuffer.copy(sacnPacket, 126);
 

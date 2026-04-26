@@ -202,7 +202,7 @@ export default function App() {
   const [fixtures, setFixtures] = useState<ActiveFixture[]>([]);
   const [logs, setLogs] = useState<string[]>(["[OK] NEURAL CORE V16.0 STABLE"]);
   const [protocol, setProtocol] = useState("Art-Net");
-  const [targetIp, setTargetIp] = useState("Broadcast");
+  const [targetIp, setTargetIp] = useState("127.0.0.1");
   const [networkInterface, setNetworkInterface] = useState("Default");
   const [sacnMulticast, setSacnMulticast] = useState("239.255.0.1");
   const [spectrumData, setSpectrumData] = useState(new Uint8Array(30));
@@ -260,8 +260,32 @@ export default function App() {
     const saved = localStorage.getItem('lax_patch');
     if (saved) {
       try {
-        setFixtures(JSON.parse(saved));
-      } catch(e) {}
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) {
+           setFixtures(parsed);
+        } else {
+           loadDefaultPatch();
+        }
+      } catch(e) {
+         loadDefaultPatch();
+      }
+    } else {
+      loadDefaultPatch();
+    }
+    
+    function loadDefaultPatch() {
+       // Replicate default Python engine patch behavior
+       const f: ActiveFixture[] = [];
+       // 12 Beams
+       for(let i=0; i<12; i++) {
+          f.push({ id: `beam_${i}`, name: `Beam ${i+1}`, type: "spot", universe: 1, addr: 1 + i*16, position: i < 6 ? "Floor_Left" : "Floor_Right", channels: MASTER_FIXTURES["WWY - 16CH295 (295W 光束灯/三合一)"].channels });
+       }
+       // 12 Pars
+       for(let i=0; i<12; i++) {
+          f.push({ id: `par_${i}`, name: `Par ${i+1}`, type: "par", universe: 1, addr: 200 + i*8, position: i < 6 ? "Ceiling_Left" : "Ceiling_Right", channels: MASTER_FIXTURES["WWY - 18ke8ch (LED 帕灯 RGBW 模式)"].channels });
+       }
+       setFixtures(f);
+       localStorage.setItem('lax_patch', JSON.stringify(f));
     }
 
     // Get audio devices
