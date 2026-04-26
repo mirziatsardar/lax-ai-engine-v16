@@ -101,44 +101,53 @@ export class AudioEngine {
       }
     }
     
-    // BASS (60Hz - 150Hz)
+    // BASS (60Hz - 150Hz approx)
     const bassBins = this.dataArray.slice(3, 8);
     const bassEnergy = Array.from(bassBins).reduce((a, b) => a + b, 0) / bassBins.length;
     
     this.bassHistory.push(bassEnergy);
-    if (this.bassHistory.length > 40) this.bassHistory.shift();
+    if (this.bassHistory.length > 30) this.bassHistory.shift(); // Python uses 30
     const avgBass = this.bassHistory.reduce((a, b) => a + b, 0) / this.bassHistory.length;
     
     // Improved Hit Logic: Base threshold + adaptive buffer
+    // Python: bass_energy > avg_bass * 3.5 and bass_energy > 2.5
+    // Note: Python uses normalized floats, we use 0-255. 2.5 might be around 50-100 in 0-255 scale.
+    // We'll use 3.5 as the multiplier if it's not manually overriden to something else.
     const dynamicBassThreshold = Math.max(this.threshold, avgBass * this.bassThresholdMult);
     
-    if (bassEnergy > dynamicBassThreshold && now - this.lastBassTime > 250) {
+    if (bassEnergy > dynamicBassThreshold && now - this.lastBassTime > 300) { // Python uses 0.3s cooldown
       this.bassHit = true;
       this.lastBassTime = now;
     } else {
       this.bassHit = false;
     }
     
-    // TREBLE (2kHz - 8kHz)
-    const trebleBins = this.dataArray.slice(92, 371);
+    // TREBLE (2kHz - 8kHz approx)
+    // Bins 100 to 350 for 44.1k/2048
+    const trebleBins = this.dataArray.slice(100, 350);
     const trebleEnergy = Math.max(...Array.from(trebleBins));
     
     this.trebleHistory.push(trebleEnergy);
-    if (this.trebleHistory.length > 30) this.trebleHistory.shift();
+    if (this.trebleHistory.length > 20) this.trebleHistory.shift(); // Python uses 20
     const avgTreble = this.trebleHistory.reduce((a, b) => a + b, 0) / this.trebleHistory.length;
     
-    const dynamicTrebleThreshold = Math.max(this.threshold * 0.4, avgTreble * 1.5);
+    // Python: treble_energy > avg_treble * 1.6 and treble_energy > 0.5
+    const dynamicTrebleThreshold = Math.max(this.threshold * 0.4, avgTreble * 1.6);
     
-    if (trebleEnergy > dynamicTrebleThreshold && now - this.lastTrebleTime > 150) {
+    if (trebleEnergy > dynamicTrebleThreshold && now - this.lastTrebleTime > 150) { // Python uses 0.15s cooldown
       this.trebleHit = true;
       this.lastTrebleTime = now;
     } else {
       this.trebleHit = false;
     }
     
-    // CLIMAX DETECTION
-    const activeBands = Array.from(this.dataArray.slice(10, 300)).filter(v => v > 150).length;
-    this.climaxMode = (activeBands > 160 && this.energy > 0.2);
+    // CLIMAX DETECTION from Python
+    // active_bands = np.sum(fft_data[10:300] > np.mean(fft_data[10:300]) * 1.8)
+    // if active_bands > 120 and audio_energy > 0.1: climax_density_flag = True
+    const midFreqData = this.dataArray.slice(10, 300);
+    const midAvg = Array.from(midFreqData).reduce((a, b) => a + b, 0) / midFreqData.length;
+    const activeBands = Array.from(midFreqData).filter(v => v > midAvg * 1.8).length;
+    this.climaxMode = (activeBands > 120 && this.energy > 0.1);
   }
 
   getSpectrum() {

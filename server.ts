@@ -27,10 +27,16 @@ async function startServer() {
   
   udpClient.bind(0, () => {
     udpClient.setBroadcast(true);
+    try {
+      // sACN Multicast needs a higher TTL to jump through routers/switches
+      udpClient.setMulticastTTL(32);
+      udpClient.setMulticastLoopback(true);
+    } catch(e) { /* Some OS might not allow this without admin */ }
     console.log("UDP DMX Relay Socket Ready");
   });
 
   const sacnSequences: Record<number, number> = {};
+  const CID = Buffer.from([0x4c, 0x41, 0x58, 0x2d, 0x41, 0x49, 0x2d, 0x56, 0x31, 0x36, 0x2d, 0x4e, 0x4f, 0x44, 0x45, 0x21]); // "LAX-AI-V16-NODE!"
 
   io.on("connection", (socket) => {
     console.log("DMX Engine Link Established:", socket.id);
@@ -52,70 +58,74 @@ async function startServer() {
           if (protocol === "Art-Net") {
             target = "255.255.255.255";
           } else {
-            // sACN Multicast: prefer user-defined, then fallback to standard formula
-            target = data.sacnMulticast || `239.255.${Math.floor(data.universe / 256)}.${data.universe % 256}`;
+            // Standard sACN Multicast address formula
+            const h = Math.floor(data.universe / 256);
+            const l = data.universe % 256;
+            target = `239.255.${h}.${l}`;
           }
         }
         
-        // Handle interface selection for multicast if supported and provided
         if (data.interface && data.interface !== "Default") {
           try {
-            // Note: In real scenarios, setMulticastInterface expects an IP or index.
-            // Simplified here to demonstrate usage of the UI field.
             if (data.interface.includes('.')) {
               udpClient.setMulticastInterface(data.interface);
             }
-          } catch (e) {
-            // Silent fail if interface is invalid or not found
-          }
+          } catch (e) { /* ignore */ }
         }
+
         if (protocol === "Art-Net") {
+          // RFC Art-Net 4 Header
           const artnetPacket = Buffer.alloc(18 + 512);
           artnetPacket.write("Art-Net\0", 0);
-          artnetPacket.writeUInt16LE(0x5000, 8);
-          artnetPacket.writeUInt16BE(14, 10);
-          artnetPacket.writeUInt8(0, 12);
-          artnetPacket.writeUInt8(0, 13);
-          const outputUni = data.universe > 0 ? data.universe - 1 : 0;
+          artnetPacket.writeUInt16LE(0x5000, 8); // OpOutput
+          artnetPacket.writeUInt16BE(14, 10);     // Proto Version
+          artnetPacket.writeUInt8(0, 12);         // Sequence (0 to disable)
+          artnetPacket.writeUInt8(0, 13);         // Physical
+          
+          // Art-Net Universe mapping (Port Address)
+          // 0-indexed port address 15 bits
+          const outputUni = data.universe > 0 ? (data.universe - 1) & 0x7FFF : 0;
           artnetPacket.writeUInt16LE(outputUni, 14);
-          artnetPacket.writeUInt16BE(512, 16);
+          
+          artnetPacket.writeUInt16BE(512, 16);    // Length
           dmxBuffer.copy(artnetPacket, 18);
 
           udpClient.send(artnetPacket, 6454, target);
         } else if (protocol === "sACN") {
+          // ANSI E1.31-2016 Compliant Header
           const sacnPacket = Buffer.alloc(126 + 512);
-          const totalLen = sacnPacket.length;
           
-          sacnPacket.writeUInt16BE(0x0010, 0);
-          sacnPacket.writeUInt16BE(0x0000, 2);
-          sacnPacket.write("ASC-E1.17\0\0\0", 4);
-          sacnPacket.writeUInt16BE(0x7000 | (totalLen - 16), 16);
-          sacnPacket.writeUInt32BE(0x00000004, 18);
-          
-          const cid = Buffer.alloc(16);
-          cid.write("LAX-AI-V16-NODE", 0);
-          cid.copy(sacnPacket, 22);
+          // Root Layer (38 bytes)
+          sacnPacket.writeUInt16BE(0x0010, 0); // Preamble Size
+          sacnPacket.writeUInt16BE(0x0000, 2); // Postamble Size
+          sacnPacket.write("ASC-E1.17\0\0\0", 4); // ACN Packet ID
+          sacnPacket.writeUInt16BE(0x7000 | (638 - 16), 16); // Flags and Length (Root Layer)
+          sacnPacket.writeUInt32BE(0x00000004, 18); // Root Vector (Root Packet)
+          CID.copy(sacnPacket, 22); // CID
 
-          sacnPacket.writeUInt16BE(0x7000 | (totalLen - 38), 38);
-          sacnPacket.writeUInt32BE(0x00000002, 40);
-          sacnPacket.write("LAX AI ENGINE V16".padEnd(32, "\0"), 44);
-          sacnPacket.writeUInt8(100, 76);
-          sacnPacket.writeUInt16BE(0, 77);
+          // E1.31 Framing Layer (77 bytes)
+          sacnPacket.writeUInt16BE(0x7000 | (638 - 38), 38); // Flags and Length (Framing Layer)
+          sacnPacket.writeUInt32BE(0x00000002, 40); // E1.31 Vector
+          sacnPacket.write("LAX-AI-ENGINE-V16".padEnd(32, "\0"), 44); // Source Name
+          sacnPacket.writeUInt8(100, 76); // Priority
+          sacnPacket.writeUInt16BE(0x0000, 77); // Synchronization Address (0 = ignore)
           
           const seq = (sacnSequences[data.universe] || 0);
-          sacnPacket.writeUInt8(seq, 79);
+          sacnPacket.writeUInt8(seq, 79); // Sequence Number
           sacnSequences[data.universe] = (seq + 1) % 256;
           
-          sacnPacket.writeUInt8(0, 80);
-          sacnPacket.writeUInt16BE(data.universe, 81);
+          sacnPacket.writeUInt8(0, 80); // Options (bit 6 = preview, bit 7 = stream terminated)
+          sacnPacket.writeUInt16BE(data.universe, 81); // Universe
 
-          sacnPacket.writeUInt16BE(0x7000 | (totalLen - 115), 115);
-          sacnPacket.writeUInt8(0x02, 117);
-          sacnPacket.writeUInt8(0xa1, 118);
-          sacnPacket.writeUInt16BE(0x0000, 119);
-          sacnPacket.writeUInt16BE(0x0001, 121);
-          sacnPacket.writeUInt16BE(513, 123);
-          sacnPacket.writeUInt8(0, 125);
+          // DMP Layer (43 bytes)
+          sacnPacket.writeUInt16BE(0x7000 | (638 - 115), 115); // Flags and Length (DMP Layer)
+          sacnPacket.writeUInt8(0x02, 117); // DMP Vector (Set Property Values)
+          sacnPacket.writeUInt8(0xa1, 118); // Address Type & Data Type
+          sacnPacket.writeUInt16BE(0x0000, 119); // First Property Address
+          sacnPacket.writeUInt16BE(0x0001, 121); // Address Increment
+          sacnPacket.writeUInt16BE(513, 123); // Property Value Count (1 start code + 512 channels)
+          sacnPacket.writeUInt8(0, 125); // DMX Start Code (0xFF for DMX)
+          
           dmxBuffer.copy(sacnPacket, 126);
 
           udpClient.send(sacnPacket, 5568, target);

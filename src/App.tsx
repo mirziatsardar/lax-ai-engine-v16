@@ -55,6 +55,7 @@ const translations = {
     active_at_energy: "ACTIVE AT HIGH ENERGY",
     normal_op: "Normal Operation",
     awaiting_climax: "AWAITING CLIMAX THRESHOLD",
+    engine_status: "Neural Engine Internal Status",
     audio_input: "Audio Input Device",
     shutter_cfg: "Shutter Configuration",
     shutter_mode: "SHUTTER MODE",
@@ -133,6 +134,7 @@ const translations = {
     active_at_energy: "能量激发中",
     normal_op: "正常运行",
     awaiting_climax: "等待能量爆发",
+    engine_status: "神经引擎内部状态",
     audio_input: "音频输入设备",
     shutter_cfg: "快门配置",
     shutter_mode: "频闪锁定",
@@ -236,7 +238,9 @@ export default function App() {
     ovrDimmer: 255,
     ovrPtSpeed: 0,
     ovrShutterLock: true,
-    ovrFrost: 0
+    ovrFrost: 0,
+    ovrShutterPW: 0,
+    ovrShutterSpot: 255
   });
 
   const [activeTab, setActiveTab] = useState<'main' | 'patch' | 'settings'>('main');
@@ -370,11 +374,21 @@ export default function App() {
         fixtures, 
         audioEngine.energy, 
         audioEngine.bassHit, 
+        audioEngine.trebleHit,
         audioEngine.climaxMode, 
         delta,
         settings,
         audioEngine.isSilence
       );
+
+      // Sync internal engine state to UI state
+      setEngineState({
+        move: dmxEngine.currentMove,
+        color: dmxEngine.currentColor,
+        dimmer: dmxEngine.currentDimmerMode,
+        phase: dmxEngine.currentPhaseMode,
+        isRandom: dmxEngine.isRandomMode
+      });
 
       // Throttled sending (~40fps)
       const nowMs = performance.now();
@@ -567,16 +581,56 @@ export default function App() {
           </div>
 
           <div className="bg-black/60 border border-cyan/30 p-4 rounded-sm">
+            <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mb-4">{t.engine_status}</h3>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <div className="p-2 bg-black/40 border border-cyan/10">
+                <span className="text-[8px] text-gray-500 uppercase block mb-1">Movement</span>
+                <span className="text-[9px] text-[#39ff14] font-mono uppercase">{engineState.move}</span>
+              </div>
+              <div className="p-2 bg-black/40 border border-cyan/10">
+                <span className="text-[8px] text-gray-500 uppercase block mb-1">Color Dynamic</span>
+                <span className="text-[9px] text-[#ff00ff] font-mono uppercase">{engineState.color}</span>
+              </div>
+              <div className="p-2 bg-black/40 border border-cyan/10">
+                <span className="text-[8px] text-gray-500 uppercase block mb-1">Dimmer Logic</span>
+                <span className="text-[9px] text-cyan-400 font-mono uppercase">{engineState.dimmer}</span>
+              </div>
+              <div className="p-2 bg-black/40 border border-cyan/10">
+                <span className="text-[8px] text-gray-500 uppercase block mb-1">Phase Sync</span>
+                <span className="text-[9px] text-orange-400 font-mono uppercase">{engineState.phase}</span>
+              </div>
+            </div>
+
             <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mb-4">{t.shutter_cfg}</h3>
             <button 
               onClick={() => setSettings(s => ({ ...s, ovrShutterLock: !s.ovrShutterLock }))}
-              className={`w-full flex items-center justify-between border p-2 mb-2 transition-all ${settings.ovrShutterLock ? "border-orange-500/40 bg-[#f27d26]/5" : "border-cyan/20 bg-cyan/5"}`}
+              className={`w-full flex items-center justify-between border p-2 mb-4 transition-all ${settings.ovrShutterLock ? "border-orange-500/40 bg-[#f27d26]/5" : "border-cyan/20 bg-cyan/5"}`}
             >
               <span className="text-[10px] font-mono">{t.shutter_mode}</span>
               <span className={`text-[10px] font-bold uppercase ${settings.ovrShutterLock ? "text-[#f27d26] glow-orange" : "text-cyan-400"}`}>
                 {settings.ovrShutterLock ? t.locked : t.unlocked}
               </span>
             </button>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+               <div>
+                  <span className="text-[8px] text-gray-500 uppercase block mb-1">Par/Wash Base: {settings.ovrShutterPW}</span>
+                  <input 
+                    type="range" min="0" max="255" step="1" 
+                    value={settings.ovrShutterPW} 
+                    onChange={e => setSettings(s => ({ ...s, ovrShutterPW: parseInt(e.target.value) }))}
+                    className="w-full accent-cyan-400/50"
+                  />
+               </div>
+               <div>
+                  <span className="text-[8px] text-gray-500 uppercase block mb-1">Beam Base: {settings.ovrShutterSpot}</span>
+                  <input 
+                    type="range" min="0" max="255" step="1" 
+                    value={settings.ovrShutterSpot} 
+                    onChange={e => setSettings(s => ({ ...s, ovrShutterSpot: parseInt(e.target.value) }))}
+                    className="w-full accent-orange-400/50"
+                  />
+               </div>
+            </div>
             <div className="text-[9px] text-gray-500 leading-relaxed font-mono">
               {t.shutter_note}
             </div>
