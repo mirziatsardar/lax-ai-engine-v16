@@ -47,9 +47,15 @@ export class DMXEngine {
     // Python Logic: Dynamic Speed
     // dynamic_speed = 0.5 if is_chill_mode else (1.5 + ambient_energy * 10.0)
     const isChillMode = effectiveEnergy < 0.05;
-    // Make speed scale heavily with energy so fast music = fast movement
-    let dynamicSpeed = isChillMode ? 0.5 : (2.0 + effectiveEnergy * 15.0);
-    if (climaxMode) dynamicSpeed *= 1.8;
+    
+    // limit impact of high energy on slow songs by keeping base speed lower and maxing out softly
+    let dynamicSpeed = 1.0;
+    if (isChillMode) {
+      dynamicSpeed = 0.5;
+    } else {
+      dynamicSpeed = 1.0 + Math.min(effectiveEnergy * 5.0, 3.0);
+    }
+    if (climaxMode) dynamicSpeed *= 1.5;
     
     if (!isSilence) {
       this.currentPhase += dynamicSpeed * delta;
@@ -92,7 +98,7 @@ export class DMXEngine {
       [255,0,255], [0,255,255], [255,128,0], [255,255,255]
     ];
 
-    fixtures.forEach(fix => {
+    fixtures.forEach((fix, globalIdx) => {
       if (!universes[fix.universe]) universes[fix.universe] = new Array(512).fill(0);
       const buffer = universes[fix.universe];
       const fixId = `${fix.universe}_${fix.addr}`;
@@ -101,6 +107,7 @@ export class DMXEngine {
       typeIds[fix.type] = (typeIds[fix.type] || 0) + 1;
       const idx = typeIds[fix.type];
       const totalOfType = typeCounts[fix.type];
+      const totalFixtures = fixtures.length;
       const state = this.fixtureStates[fixId];
       
       // Phase Offset
@@ -150,17 +157,23 @@ export class DMXEngine {
       state.pan16 += (targetPan16 - state.pan16) * lerpSpeed;
       state.tilt16 += (targetTilt16 - state.tilt16) * lerpSpeed;
 
-      // Color Logic from Python
+      // Color Logic Sync across ALL fixtures
       let r = 0, g = 0, b = 0;
+      let colorWheelIndex = 0;
+      
       if (!isSilence) {
         if (this.currentColor === "sync") {
           [r, g, b] = colors[this.colorIdx % colors.length];
+          colorWheelIndex = this.colorIdx % 14;
         } else if (this.currentColor === "rainbow") {
-          const hue = (this.currentPhase * 0.2 + idx / totalOfType) % 1;
+          // Use globalIdx for rainbow so all fixtures of all types flow together
+          const hue = (this.currentPhase * 0.2 + globalIdx / totalFixtures) % 1;
           [r, g, b] = this.hsvToRgb(hue, 1, 1);
+          colorWheelIndex = Math.floor(hue * 14);
         } else if (this.currentColor === "chase") {
-          const cId = (this.beatCounter + idx) % colors.length;
+          const cId = (this.beatCounter + globalIdx) % colors.length;
           [r, g, b] = colors[cId];
+          colorWheelIndex = cId % 14;
         }
       }
 
@@ -227,14 +240,14 @@ export class DMXEngine {
       setCh("Frost", settings.ovrFrost);
       setCh("Speed", settings.ovrPtSpeed);
       
-      const cWheel = (this.colorIdx * 15) % 120;
+      const cWheel = (colorWheelIndex * 10) % 255;
       setCh("Color", cWheel);
       setCh("Color2", cWheel);
       setCh("Gobo", this.goboIdx * 10);
       
-      setCh("Prism1", (!isChillMode && !isSilence) ? 255 : 0);
-      setCh("Prism1Rot", Math.floor(127 + 127 * Math.sin(this.currentPhase)));
-      setCh("Prism2", climaxMode ? 255 : 0);
+      setCh("Prism1", settings.ovrPrism ? (!isChillMode && !isSilence ? 255 : 0) : 0);
+      setCh("Prism1Rot", settings.ovrPrism ? Math.floor(127 + 127 * Math.sin(this.currentPhase)) : 0);
+      setCh("Prism2", settings.ovrPrism && climaxMode ? 255 : 0);
       setCh("Focus", 128);
       setCh("Zoom", climaxMode ? 255 : 128);
 

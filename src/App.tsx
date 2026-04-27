@@ -294,7 +294,8 @@ export default function App() {
     ovrShutterLock: true,
     ovrFrost: 0,
     ovrShutterPW: 0,
-    ovrShutterSpot: 255
+    ovrShutterSpot: 255,
+    ovrPrism: true
   });
 
   const [activeTab, setActiveTab] = useState<'main' | 'patch' | 'settings' | 'audio' | 'logs'>('main');
@@ -624,11 +625,20 @@ export default function App() {
             <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mb-4">{t.shutter_cfg}</h3>
             <button 
               onClick={() => setSettings(s => ({ ...s, ovrShutterLock: !s.ovrShutterLock }))}
-              className={`w-full flex items-center justify-between border p-2 mb-4 transition-all ${settings.ovrShutterLock ? "border-orange-500/40 bg-[#f27d26]/5" : "border-cyan/20 bg-cyan/5"}`}
+              className={`w-full flex items-center justify-between border p-2 mb-2 transition-all ${settings.ovrShutterLock ? "border-orange-500/40 bg-[#f27d26]/5" : "border-cyan/20 bg-cyan/5"}`}
             >
               <span className="text-[10px] font-mono">{t.shutter_mode}</span>
               <span className={`text-[10px] font-bold uppercase ${settings.ovrShutterLock ? "text-[#f27d26] glow-orange" : "text-cyan-400"}`}>
                 {settings.ovrShutterLock ? t.locked : t.unlocked}
+              </span>
+            </button>
+            <button 
+              onClick={() => setSettings(s => ({ ...s, ovrPrism: !s.ovrPrism }))}
+              className={`w-full flex items-center justify-between border p-2 mb-4 transition-all ${settings.ovrPrism ? "border-cyan/50 bg-[#00f2ff]/10" : "border-gray-500/20 bg-gray-500/5"}`}
+            >
+              <span className="text-[10px] font-mono">PRISM (菱镜)</span>
+              <span className={`text-[10px] font-bold uppercase ${settings.ovrPrism ? "text-[#00f2ff] glow" : "text-gray-500"}`}>
+                {settings.ovrPrism ? "ON" : "OFF"}
               </span>
             </button>
             <div className="text-[9px] text-gray-500 leading-relaxed font-mono opacity-50">
