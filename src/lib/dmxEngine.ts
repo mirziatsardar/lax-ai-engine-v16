@@ -44,18 +44,16 @@ export class DMXEngine {
     const effectiveBassHit = isSilence ? false : bassHit;
     const effectiveTrebleHit = isSilence ? false : trebleHit;
 
-    // Python Logic: Dynamic Speed
-    // dynamic_speed = 0.5 if is_chill_mode else (1.5 + ambient_energy * 10.0)
-    const isChillMode = effectiveEnergy < 0.05;
-    
     // limit impact of high energy on slow songs by keeping base speed lower and maxing out softly
     let dynamicSpeed = 1.0;
+    const isChillMode = effectiveEnergy < 0.05;
     if (isChillMode) {
       dynamicSpeed = 0.5;
     } else {
-      dynamicSpeed = 1.0 + Math.min(effectiveEnergy * 5.0, 3.0);
+      // Soften the speed scale so it doesn't whip around crazily
+      dynamicSpeed = 0.8 + Math.min(effectiveEnergy * 1.5, 1.5);
     }
-    if (climaxMode) dynamicSpeed *= 1.5;
+    if (climaxMode) dynamicSpeed *= 1.2;
     
     if (!isSilence) {
       this.currentPhase += dynamicSpeed * delta;
@@ -65,14 +63,16 @@ export class DMXEngine {
     if (this.strobeTimer > 0) this.strobeTimer -= delta;
     
     // Treble Logic -> Gobo Change (打搽声换图案)
-    if (effectiveTrebleHit) {
+    // Add time-based debounce to prevent too rapid gobo changing
+    if (effectiveTrebleHit && this.patternTimer > 0.2) {
       this.goboIdx = (this.goboIdx + 1) % 15; // Cycle through more patterns
+      this.patternTimer = 0;
     }
 
     // Bass Logic -> Color Change & Strobe Trigger
     if (effectiveBassHit) {
       this.beatCounter++;
-      this.colorIdx = (this.colorIdx + 1) % 8;
+      this.colorIdx++;
       
       // Keep flash duration short for punchy sync
       this.strobeTimer = 0.15; 
@@ -93,9 +93,17 @@ export class DMXEngine {
     fixtures.forEach(f => typeCounts[f.type] = (typeCounts[f.type] || 0) + 1);
     const typeIds: Record<string, number> = {};
 
-    const colors: [number, number, number][] = [
-      [255,0,0], [0,255,0], [0,0,255], [255,255,0], 
-      [255,0,255], [0,255,255], [255,128,0], [255,255,255]
+    // Standard DMX Spot Color wheel mapping and matching RGB
+    // Assuming typical 14-slot color wheel
+    const colorPalette = [
+      { rgb: [255, 0, 0], dmx: 10 },     // Red
+      { rgb: [0, 255, 0], dmx: 40 },     // Green
+      { rgb: [0, 0, 255], dmx: 130 },    // Blue
+      { rgb: [255, 255, 0], dmx: 80 },   // Yellow
+      { rgb: [255, 0, 255], dmx: 90 },   // Magenta
+      { rgb: [0, 255, 255], dmx: 100 },  // Cyan
+      { rgb: [255, 128, 0], dmx: 20 },   // Orange
+      { rgb: [255, 255, 255], dmx: 0 }   // White
     ];
 
     fixtures.forEach((fix, globalIdx) => {
@@ -118,8 +126,8 @@ export class DMXEngine {
       // Motion Logic from Python
       let targetPan16 = 32768;
       let targetTilt16 = 32768;
-      const ampP = isChillMode ? 10000 : 30000;
-      const ampT = isChillMode ? 6000 : 22000;
+      const ampP = isChillMode ? 10000 : 20000;
+      const ampT = isChillMode ? 6000 : 16000;
 
       if (!isSilence) {
         switch(this.currentMove) {
@@ -153,7 +161,7 @@ export class DMXEngine {
         }
       }
 
-      const lerpSpeed = isChillMode ? 0.08 : 0.3;
+      const lerpSpeed = isChillMode ? 0.08 : 0.2;
       state.pan16 += (targetPan16 - state.pan16) * lerpSpeed;
       state.tilt16 += (targetTilt16 - state.tilt16) * lerpSpeed;
 
@@ -163,17 +171,19 @@ export class DMXEngine {
       
       if (!isSilence) {
         if (this.currentColor === "sync") {
-          [r, g, b] = colors[this.colorIdx % colors.length];
-          colorWheelIndex = this.colorIdx % 14;
+          const c = colorPalette[this.colorIdx % colorPalette.length];
+          [r, g, b] = c.rgb;
+          colorWheelIndex = c.dmx;
         } else if (this.currentColor === "rainbow") {
           // Use globalIdx for rainbow so all fixtures of all types flow together
           const hue = (this.currentPhase * 0.2 + globalIdx / totalFixtures) % 1;
           [r, g, b] = this.hsvToRgb(hue, 1, 1);
-          colorWheelIndex = Math.floor(hue * 14);
+          colorWheelIndex = Math.floor(hue * 130); // Spread hue evenly across DMX color wheel 0-130
         } else if (this.currentColor === "chase") {
-          const cId = (this.beatCounter + globalIdx) % colors.length;
-          [r, g, b] = colors[cId];
-          colorWheelIndex = cId % 14;
+          const cId = (this.beatCounter + globalIdx) % colorPalette.length;
+          const c = colorPalette[cId];
+          [r, g, b] = c.rgb;
+          colorWheelIndex = c.dmx;
         }
       }
 
@@ -236,18 +246,30 @@ export class DMXEngine {
       setCh("Red", r);
       setCh("Green", g);
       setCh("Blue", b);
-      setCh("White", climaxMode ? 255 : 0);
+      
+      // Calculate independent white channel instead of blasting it at climax
+      // Only set white channel if we want white, otherwise let RGB handle other colors
+      const isPureWhite = (r === 255 && g === 255 && b === 255);
+      setCh("White", isPureWhite ? 255 : 0); 
+      
       setCh("Frost", settings.ovrFrost);
       setCh("Speed", settings.ovrPtSpeed);
       
-      const cWheel = (colorWheelIndex * 10) % 255;
+      const cWheel = Math.floor(colorWheelIndex);
       setCh("Color", cWheel);
       setCh("Color2", cWheel);
-      setCh("Gobo", this.goboIdx * 10);
       
-      setCh("Prism1", settings.ovrPrism ? (!isChillMode && !isSilence ? 255 : 0) : 0);
-      setCh("Prism1Rot", settings.ovrPrism ? Math.floor(127 + 127 * Math.sin(this.currentPhase)) : 0);
-      setCh("Prism2", settings.ovrPrism && climaxMode ? 255 : 0);
+      // Gobo / Prism logic based on user request:
+      // "菱镜开的时候有菱镜，菱镜关的时候出现光束换图案gobo"
+      const prismActive = settings.ovrPrism;
+      
+      // If Prism is active, Gobo is 0 (open). If Prism is OFF, we use the active Gobo index
+      setCh("Gobo", prismActive ? 0 : (this.goboIdx * 15) % 255);
+      
+      setCh("Prism1", prismActive ? 255 : 0);
+      setCh("Prism1Rot", prismActive && !isChillMode ? Math.floor(127 + 127 * Math.sin(this.currentPhase)) : 0);
+      setCh("Prism2", prismActive && climaxMode ? 255 : 0);
+      
       setCh("Focus", 128);
       setCh("Zoom", climaxMode ? 255 : 128);
 
