@@ -414,24 +414,43 @@ export default function App() {
 
   const [activeConsole, setActiveConsole] = useState(CONSOLES[0]);
 
+  // Refs to avoid stale closures in animation loop
+  const stateRef = useRef({
+    fixtures, settings, audioSensitivity, audioThreshold, audioAdaptiveMult, protocol, targetIp, sacnMulticast, networkInterface
+  });
+  useEffect(() => {
+    stateRef.current = { fixtures, settings, audioSensitivity, audioThreshold, audioAdaptiveMult, protocol, targetIp, sacnMulticast, networkInterface };
+  }, [fixtures, settings, audioSensitivity, audioThreshold, audioAdaptiveMult, protocol, targetIp, sacnMulticast, networkInterface]);
+
+  const startEngine = async (deviceId: string) => {
+    if (fixtures.length === 0) {
+      alert(lang === 'zh' ? "请先配接灯具以启动链路" : "PLEASE PATCH FIXTURES TO INITIATE LINK");
+      return;
+    }
+    try {
+      await audioEngine.start(deviceId);
+      setIsRunning(true);
+      addLog(`ENGINE ENGAGED | CONSOLE: ${activeConsole}`);
+      startLoop();
+    } catch (e: any) {
+      addLog("ERROR: AUDIO ACCESS DENIED - " + (e.message || String(e)));
+      setIsRunning(true);
+      audioEngine.isSilence = true;
+      startLoop();
+    }
+  };
+
+  const stopEngine = () => {
+    setIsRunning(false);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    addLog("SYSTEM OFFLINE");
+  };
+
   const toggleEngine = async () => {
     if (!isRunning) {
-      if (fixtures.length === 0) {
-        alert(lang === 'zh' ? "请先配接灯具以启动链路" : "PLEASE PATCH FIXTURES TO INITIATE LINK");
-        return;
-      }
-      try {
-        await audioEngine.start(selectedDeviceId);
-        setIsRunning(true);
-        addLog(`ENGINE ENGAGED | CONSOLE: ${activeConsole}`);
-        startLoop();
-      } catch (e) {
-        addLog("ERROR: AUDIO ACCESS DENIED");
-      }
+      await startEngine(selectedDeviceId);
     } else {
-      setIsRunning(false);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      addLog("SYSTEM OFFLINE");
+      stopEngine();
     }
   };
 
@@ -439,58 +458,63 @@ export default function App() {
     let lastTime = performance.now();
     
     const loop = (now: number) => {
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
+      try {
+        const delta = (now - lastTime) / 1000;
+        lastTime = now;
+        const st = stateRef.current;
 
-      // Sync sensitivity/threshold settings to audioEngine
-      audioEngine.sensitivity = audioSensitivity;
-      audioEngine.threshold = audioThreshold;
-      audioEngine.bassThresholdMult = audioAdaptiveMult;
+        // Sync sensitivity/threshold settings to audioEngine
+        audioEngine.sensitivity = st.audioSensitivity;
+        audioEngine.threshold = st.audioThreshold;
+        audioEngine.bassThresholdMult = st.audioAdaptiveMult;
 
-      audioEngine.process();
-      setSpectrumData(audioEngine.getSpectrum());
-      setBassHit(audioEngine.bassHit);
-      setTrebleHit(audioEngine.trebleHit);
-      setClimaxMode(audioEngine.climaxMode);
-      setIsSilence(audioEngine.isSilence);
+        audioEngine.process();
+        setSpectrumData(audioEngine.getSpectrum());
+        setBassHit(audioEngine.bassHit);
+        setTrebleHit(audioEngine.trebleHit);
+        setClimaxMode(audioEngine.climaxMode);
+        setIsSilence(audioEngine.isSilence);
 
-      const universes = dmxEngine.update(
-        fixtures, 
-        audioEngine.energy, 
-        audioEngine.bassHit, 
-        audioEngine.trebleHit,
-        audioEngine.climaxMode, 
-        delta,
-        settings,
-        audioEngine.isSilence
-      );
+        const universes = dmxEngine.update(
+          st.fixtures, 
+          audioEngine.energy, 
+          audioEngine.bassHit, 
+          audioEngine.trebleHit,
+          audioEngine.climaxMode, 
+          delta,
+          st.settings,
+          audioEngine.isSilence
+        );
 
-      // Sync internal engine state to UI state
-      setEngineState({
-        move: dmxEngine.currentMove,
-        color: dmxEngine.currentColor,
-        dimmer: dmxEngine.currentDimmerMode,
-        phase: dmxEngine.currentPhaseMode,
-        isRandom: dmxEngine.isRandomMode
-      });
-
-      // Throttled sending (~40fps)
-      const nowMs = performance.now();
-      
-      if (nowMs - lastEmitTimeRef.current >= 25) {
-        Object.entries(universes).forEach(([uni, buffer]) => {
-          socketRef.current?.emit("dmx_frame", {
-            universe: parseInt(uni),
-            buffer: buffer,
-            protocol: protocol,
-            targetIp: (targetIp === "Multicast" || targetIp === "Broadcast") ? undefined : targetIp,
-            sacnMulticast: protocol === "sACN" ? sacnMulticast : undefined,
-            interface: networkInterface !== "Default" ? networkInterface : undefined
-          });
+        // Sync internal engine state to UI state
+        setEngineState({
+          move: dmxEngine.currentMove,
+          color: dmxEngine.currentColor,
+          dimmer: dmxEngine.currentDimmerMode,
+          phase: dmxEngine.currentPhaseMode,
+          isRandom: dmxEngine.isRandomMode
         });
-        lastEmitTimeRef.current = nowMs;
-      }
 
+        // Throttled sending (~40fps)
+        const nowMs = performance.now();
+        
+        if (nowMs - lastEmitTimeRef.current >= 25) {
+          Object.entries(universes).forEach(([uni, bufferArr]) => {
+            socketRef.current?.emit("dmx_frame", {
+              universe: parseInt(uni),
+              buffer: Array.from(bufferArr as number[]),
+              protocol: st.protocol,
+              targetIp: (st.targetIp === "Multicast" || st.targetIp === "Broadcast") ? undefined : st.targetIp,
+              sacnMulticast: st.protocol === "sACN" ? st.sacnMulticast : undefined,
+              interface: st.networkInterface !== "Default" ? st.networkInterface : undefined
+            });
+          });
+          lastEmitTimeRef.current = nowMs;
+        }
+      } catch (err) {
+        console.error("Loop Error:", err);
+      }
+      
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
@@ -742,8 +766,12 @@ export default function App() {
                       <select 
                         value={selectedDeviceId}
                         onChange={(e) => {
-                          setSelectedDeviceId(e.target.value);
-                          if (isRunning) toggleEngine().then(() => toggleEngine());
+                          const newId = e.target.value;
+                          setSelectedDeviceId(newId);
+                          if (isRunning) {
+                             stopEngine();
+                             startEngine(newId);
+                          }
                         }}
                         className="w-full bg-black/50 border border-cyan/30 p-2 text-xs font-mono text-[#39FF14] outline-none"
                       >
@@ -945,8 +973,12 @@ export default function App() {
                   <select 
                     value={selectedDeviceId}
                     onChange={(e) => {
-                      setSelectedDeviceId(e.target.value);
-                      if (isRunning) toggleEngine().then(() => toggleEngine()); // cycle to reconnect
+                      const newId = e.target.value;
+                      setSelectedDeviceId(newId);
+                      if (isRunning) {
+                         stopEngine();
+                         startEngine(newId);
+                      }
                     }}
                     className="w-full bg-black/50 border border-cyan/30 p-2 text-xs font-mono text-[#39FF14] outline-none"
                   >

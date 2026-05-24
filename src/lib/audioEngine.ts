@@ -49,7 +49,7 @@ export class AudioEngine {
       }
 
       const constraints: MediaStreamConstraints = { 
-        audio: deviceId ? { deviceId: { exact: deviceId } } : true 
+        audio: deviceId ? { deviceId: { ideal: deviceId } } : true 
       };
       
       this.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -67,6 +67,7 @@ export class AudioEngine {
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
       }
+      this.isSilence = false;
     } catch (err) {
       console.error("Audio Engine Start Error:", err);
       throw err;
@@ -75,7 +76,10 @@ export class AudioEngine {
 
   process() {
     if (!this.analyser || !this.dataArray || !this.audioContext) return;
-    if (this.audioContext.state === 'suspended') return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+      return;
+    }
     
     this.analyser.getByteFrequencyData(this.dataArray);
     

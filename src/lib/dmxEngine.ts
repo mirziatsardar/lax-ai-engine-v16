@@ -216,7 +216,7 @@ export class DMXEngine {
         state.dimmer += (targetDimmer - state.dimmer) * 0.2;
       }
       
-      const finalDimmer = Math.max(0, Math.min(settings.ovrDimmer, Math.floor(state.dimmer)));
+      let finalDimmer = Math.max(0, Math.min(settings.ovrDimmer, Math.floor(state.dimmer)));
 
       // Shutter Logic
       let finalShutter = 255;
@@ -234,6 +234,7 @@ export class DMXEngine {
         finalShutter = baseShutter;
       }
 
+      const prismActive = climaxMode || (energy > 0.8 && trebleHit);
       let finalGobo = prismActive ? 0 : (this.goboIdx * 15) % 255;
       let finalPrism1 = prismActive ? 255 : 0;
       let finalPrism1Rot = prismActive && !isChillMode ? Math.floor(127 + 127 * Math.sin(this.currentPhase)) : 0;
@@ -243,7 +244,7 @@ export class DMXEngine {
       let isPureWhite = (r === 255 && g === 255 && b === 255);
       
       // === PLAN MODE OVERRIDES ===
-      if (this.planModeActive && this.planOverrides[fix.id] && this.planOverrides[fix.id].active) {
+      if (this.planOverrides[fix.id] && this.planOverrides[fix.id].active) {
         const ovr = this.planOverrides[fix.id];
         // Instantly snap to the target position
         state.pan16 = ovr.pan;

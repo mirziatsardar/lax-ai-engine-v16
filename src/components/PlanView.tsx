@@ -31,7 +31,7 @@ export function PlanView({ fixtures, engine, onClose }: PlanViewProps) {
 
   useEffect(() => {
     // Load from local or generate initial positions
-    const savedPos = localStorage.getItem('lax_fixture_pos');
+    const savedPos = localStorage.getItem('lax_fixture_pos_v2');
     const poss: Record<string, {x: number, y: number}> = savedPos ? JSON.parse(savedPos) : {};
     
     let needsSave = false;
@@ -46,13 +46,13 @@ export function PlanView({ fixtures, engine, onClose }: PlanViewProps) {
     });
     setFixturePositions(poss);
     if (needsSave) {
-      localStorage.setItem('lax_fixture_pos', JSON.stringify(poss));
+      localStorage.setItem('lax_fixture_pos_v2', JSON.stringify(poss));
     }
   }, [fixtures]);
 
   const savePositions = (newPoss: Record<string, {x: number, y: number}>) => {
     setFixturePositions(newPoss);
-    localStorage.setItem('lax_fixture_pos', JSON.stringify(newPoss));
+    localStorage.setItem('lax_fixture_pos_v2', JSON.stringify(newPoss));
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
