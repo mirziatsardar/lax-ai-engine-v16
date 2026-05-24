@@ -24,7 +24,7 @@ import { DMXEngine } from './lib/dmxEngine';
 import { MASTER_FIXTURES } from './lib/fixtures';
 import { ActiveFixture, FixturePosition } from './types';
 import Spectrum from './components/Spectrum';
-import { PlanView } from './components/PlanView';
+import { Stage3D } from './components/Stage3D';
 
 const BG_DARK = "#050505";
 const PANEL_BG = "rgba(0, 0, 0, 0.6)";
@@ -48,7 +48,7 @@ const translations = {
     engine_cfg: "Engine Cfg",
     audio_tab: "Audio Logic",
     logs_tab: "Engine Logs",
-    plan_view: "Plan View",
+    plan_view: "3D View",
     audio_sensing: "Audio Sensing Logic",
     bass: "Bass (Low Freq)",
     treble: "Treble (High Freq)",
@@ -155,7 +155,7 @@ const translations = {
     engine_cfg: "引擎设置",
     audio_tab: "音频逻辑",
     logs_tab: "运行日志",
-    plan_view: "平面图",
+    plan_view: "3D环境",
     audio_sensing: "音频感应逻辑",
     bass: "低音 (频段触发)",
     treble: "高音 (频段触发)",
@@ -550,7 +550,7 @@ export default function App() {
       
       <AnimatePresence>
         {isPlanViewOpen && (
-          <PlanView 
+          <Stage3D 
             fixtures={fixtures} 
             engine={dmxEngine} 
             onClose={() => setIsPlanViewOpen(false)} 
