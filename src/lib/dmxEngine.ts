@@ -15,6 +15,10 @@ export class DMXEngine {
   public currentPhaseMode: PhaseMode = "gradient";
   public isRandomMode = true;
   
+  public planModeActive = false;
+  // fixtureId (universe_addr) -> override config
+  public planOverrides: Record<string, { active: boolean, pan: number, tilt: number, frost: boolean }> = {};
+  
   private fixtureStates: Record<string, { pan16: number, tilt16: number, dimmer: number }> = {};
   private goboIdx = 0;
   private colorIdx = 0;
@@ -230,6 +234,30 @@ export class DMXEngine {
         finalShutter = baseShutter;
       }
 
+      let finalGobo = prismActive ? 0 : (this.goboIdx * 15) % 255;
+      let finalPrism1 = prismActive ? 255 : 0;
+      let finalPrism1Rot = prismActive && !isChillMode ? Math.floor(127 + 127 * Math.sin(this.currentPhase)) : 0;
+      let finalPrism2 = prismActive && climaxMode ? 255 : 0;
+      let finalFrost = settings.ovrFrost;
+      let finalZoom = climaxMode ? 255 : 128;
+      let isPureWhite = (r === 255 && g === 255 && b === 255);
+      
+      // === PLAN MODE OVERRIDES ===
+      if (this.planModeActive && this.planOverrides[fix.id] && this.planOverrides[fix.id].active) {
+        const ovr = this.planOverrides[fix.id];
+        // Instantly snap to the target position
+        state.pan16 = ovr.pan;
+        state.tilt16 = ovr.tilt;
+        finalDimmer = 255;
+        finalShutter = 255;
+        // White beam strongly
+        r = 255; g = 255; b = 255; colorWheelIndex = 0; isPureWhite = true;
+        finalFrost = ovr.frost ? 255 : 0;
+        finalPrism1 = 0; finalPrism1Rot = 0; finalPrism2 = 0;
+        finalGobo = 0;
+        finalZoom = ovr.frost ? 0 : 128;
+      }
+
       // Map to buffer
       const setCh = (name: string, val: number) => {
         const ch = fix.channels[name];
@@ -247,31 +275,22 @@ export class DMXEngine {
       setCh("Green", g);
       setCh("Blue", b);
       
-      // Calculate independent white channel instead of blasting it at climax
-      // Only set white channel if we want white, otherwise let RGB handle other colors
-      const isPureWhite = (r === 255 && g === 255 && b === 255);
       setCh("White", isPureWhite ? 255 : 0); 
       
-      setCh("Frost", settings.ovrFrost);
+      setCh("Frost", finalFrost);
       setCh("Speed", settings.ovrPtSpeed);
       
       const cWheel = Math.floor(colorWheelIndex);
       setCh("Color", cWheel);
       setCh("Color2", cWheel);
       
-      // Gobo / Prism logic based on user request:
-      // "菱镜开的时候有菱镜，菱镜关的时候出现光束换图案gobo"
-      const prismActive = settings.ovrPrism;
-      
-      // If Prism is active, Gobo is 0 (open). If Prism is OFF, we use the active Gobo index
-      setCh("Gobo", prismActive ? 0 : (this.goboIdx * 15) % 255);
-      
-      setCh("Prism1", prismActive ? 255 : 0);
-      setCh("Prism1Rot", prismActive && !isChillMode ? Math.floor(127 + 127 * Math.sin(this.currentPhase)) : 0);
-      setCh("Prism2", prismActive && climaxMode ? 255 : 0);
+      setCh("Gobo", finalGobo);
+      setCh("Prism1", finalPrism1);
+      setCh("Prism1Rot", finalPrism1Rot);
+      setCh("Prism2", finalPrism2);
       
       setCh("Focus", 128);
-      setCh("Zoom", climaxMode ? 255 : 128);
+      setCh("Zoom", finalZoom);
 
       if (fix.type === "laser") {
         setCh("Mode", 255);

@@ -15,7 +15,8 @@ import {
   Power, 
   AlertTriangle,
   Radio,
-  Monitor
+  Monitor,
+  Crosshair
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { AudioEngine } from './lib/audioEngine';
@@ -23,6 +24,7 @@ import { DMXEngine } from './lib/dmxEngine';
 import { MASTER_FIXTURES } from './lib/fixtures';
 import { ActiveFixture, FixturePosition } from './types';
 import Spectrum from './components/Spectrum';
+import { PlanView } from './components/PlanView';
 
 const BG_DARK = "#050505";
 const PANEL_BG = "rgba(0, 0, 0, 0.6)";
@@ -46,6 +48,7 @@ const translations = {
     engine_cfg: "Engine Cfg",
     audio_tab: "Audio Logic",
     logs_tab: "Engine Logs",
+    plan_view: "Plan View",
     audio_sensing: "Audio Sensing Logic",
     bass: "Bass (Low Freq)",
     treble: "Treble (High Freq)",
@@ -152,6 +155,7 @@ const translations = {
     engine_cfg: "引擎设置",
     audio_tab: "音频逻辑",
     logs_tab: "运行日志",
+    plan_view: "平面图",
     audio_sensing: "音频感应逻辑",
     bass: "低音 (频段触发)",
     treble: "高音 (频段触发)",
@@ -299,6 +303,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState<'main' | 'patch' | 'settings' | 'audio' | 'logs'>('main');
+  const [isPlanViewOpen, setIsPlanViewOpen] = useState(false);
 
   const addLog = (msg: string) => {
     setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 10));
@@ -519,6 +524,16 @@ export default function App() {
     <div className="w-full h-screen bg-[#050505] text-[#e0e0e0] font-sans overflow-hidden flex flex-col relative select-none">
       <div className="absolute inset-0 bg-grid pointer-events-none"></div>
       
+      <AnimatePresence>
+        {isPlanViewOpen && (
+          <PlanView 
+            fixtures={fixtures} 
+            engine={dmxEngine} 
+            onClose={() => setIsPlanViewOpen(false)} 
+          />
+        )}
+      </AnimatePresence>
+
       {/* HUD Header */}
       <header className="h-16 border-b border-cyan/30 flex items-center justify-between px-8 bg-black/40 backdrop-blur-md z-10">
         <div className="flex items-center gap-4">
@@ -563,6 +578,19 @@ export default function App() {
             <div className="flex flex-col gap-2">
               <NavButton label={t.neural_core} icon={<Activity size={14}/>} active={activeTab === 'main'} onClick={() => setActiveTab('main')} />
               <NavButton label={t.fixture_patch} icon={<Box size={14}/>} active={activeTab === 'patch'} onClick={() => setActiveTab('patch')} />
+              <button 
+                onClick={() => setIsPlanViewOpen(p => !p)}
+                className={`w-full flex items-center justify-between p-3 border font-mono text-xs tracking-widest transition-all ${
+                  isPlanViewOpen 
+                    ? "bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]" 
+                    : "border-gray-800 text-gray-500 hover:border-cyan/50 hover:bg-cyan/5"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Crosshair size={14} />
+                  <span>{t.plan_view}</span>
+                </div>
+              </button>
               <NavButton label={t.audio_tab} icon={<Radio size={14}/>} active={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
               <NavButton label={t.logs_tab} icon={<Database size={14}/>} active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
               <NavButton label={t.engine_cfg} icon={<Settings size={14}/>} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
