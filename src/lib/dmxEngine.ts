@@ -17,7 +17,7 @@ export class DMXEngine {
   
   public planModeActive = false;
   // fixtureId (universe_addr) -> override config
-  public planOverrides: Record<string, { active: boolean, pan: number, tilt: number, frost: boolean }> = {};
+  public planOverrides: Record<string, { active: boolean, pan: number, tilt: number, frost: boolean, color?: number, gobo?: number, prism?: boolean }> = {};
   
   private fixtureStates: Record<string, { pan16: number, tilt16: number, dimmer: number }> = {};
   private goboIdx = 0;
@@ -100,14 +100,16 @@ export class DMXEngine {
     // Standard DMX Spot Color wheel mapping and matching RGB
     // Assuming typical 14-slot color wheel
     const colorPalette = [
-      { rgb: [255, 0, 0], dmx: 10 },     // Red
-      { rgb: [0, 255, 0], dmx: 40 },     // Green
-      { rgb: [0, 0, 255], dmx: 130 },    // Blue
-      { rgb: [255, 255, 0], dmx: 80 },   // Yellow
-      { rgb: [255, 0, 255], dmx: 90 },   // Magenta
-      { rgb: [0, 255, 255], dmx: 100 },  // Cyan
-      { rgb: [255, 128, 0], dmx: 20 },   // Orange
-      { rgb: [255, 255, 255], dmx: 0 }   // White
+      { rgb: [255, 255, 255], dmx: 0 },   // White
+      { rgb: [255, 0, 0], dmx: 9 },       // Red
+      { rgb: [255, 255, 0], dmx: 18 },    // Yellow
+      { rgb: [0, 0, 255], dmx: 27 },      // Blue
+      { rgb: [0, 255, 0], dmx: 36 },      // Green
+      { rgb: [255, 0, 255], dmx: 45 },    // Pink/Magenta
+      { rgb: [255, 90, 0], dmx: 54 },     // Orange
+      { rgb: [0, 255, 255], dmx: 63 },    // Cyan
+      { rgb: [255, 255, 128], dmx: 72 },  // White-Yellow
+      { rgb: [255, 60, 0], dmx: 81 },     // Red-Orange
     ];
 
     fixtures.forEach((fix, globalIdx) => {
@@ -218,28 +220,43 @@ export class DMXEngine {
       
       let finalDimmer = Math.max(0, Math.min(settings.ovrDimmer, Math.floor(state.dimmer)));
 
-      // Shutter Logic
+      // Shutter Logic - Apply BEAM295W Strobe logic
       let finalShutter = 255;
-      const baseShutter = fix.type === 'par' || fix.type === 'wash' 
-        ? (settings.ovrShutterPW ?? 0) 
-        : (settings.ovrShutterSpot ?? 255);
-
+      let spotShutterStatus = 255; // 255 = on, 0 = off, 100 = fast strobe
       if (isSilence) {
-        finalShutter = baseShutter;
+        spotShutterStatus = 0;
       } else if (!settings.ovrShutterLock) {
-        // Force shutter to 0 if not strobing to ensure complete blackout on beat sync
-        finalShutter = (this.strobeTimer > 0) ? baseShutter : 0;
+        spotShutterStatus = (this.strobeTimer > 0) ? 100 : 0;
       } else {
-        // Locked: keep it normal
-        finalShutter = baseShutter;
+        spotShutterStatus = 255;
       }
 
+      const baseShutter = fix.type === 'par' || fix.type === 'wash' 
+        ? (settings.ovrShutterPW ?? 0) 
+        : spotShutterStatus;
+
+      finalShutter = baseShutter;
+
       const prismActive = climaxMode || (energy > 0.8 && trebleHit);
-      let finalGobo = prismActive ? 0 : (this.goboIdx * 15) % 255;
-      let finalPrism1 = prismActive ? 255 : 0;
-      let finalPrism1Rot = prismActive && !isChillMode ? Math.floor(127 + 127 * Math.sin(this.currentPhase)) : 0;
+      
+      // BEAM295W Gobo: 0-97 scale per 6 values = static gobos (16 gobos max)
+      // We map this.goboIdx (which cycles) to the static gobo wheels
+      let finalGobo = prismActive ? 0 : ((this.goboIdx % 16) * 6);
+      
+      // BEAM 295W Prism1: 0-63 beam, 64-127 10-pt, 128-191 64-pt, 192-255 128-pt
+      let finalPrism1 = prismActive ? 150 : 0;
+      
+      // BEAM 295W Prism1Rot: 0-127 stop, 128-165 fast R, 166-191 slow R, 192-200 slow L, 200-255 fast L
+      let finalPrism1Rot = 0;
+      if (prismActive && !isChillMode) {
+        finalPrism1Rot = Math.sin(this.currentPhase) > 0 ? 140 : 210;
+      }
+
       let finalPrism2 = prismActive && climaxMode ? 255 : 0;
+      
+      // Focus: 0-127 beam, 128-191 frost, 192-255 color disk
       let finalFrost = settings.ovrFrost;
+      let finalFocus = finalFrost > 127 ? 150 : (prismActive ? 64 : 64);
       let finalZoom = climaxMode ? 255 : 128;
       let isPureWhite = (r === 255 && g === 255 && b === 255);
       
@@ -251,11 +268,21 @@ export class DMXEngine {
         state.tilt16 = ovr.tilt;
         finalDimmer = 255;
         finalShutter = 255;
-        // White beam strongly
-        r = 255; g = 255; b = 255; colorWheelIndex = 0; isPureWhite = true;
+        
+        if (ovr.color !== undefined) {
+           colorWheelIndex = ovr.color;
+           isPureWhite = false;
+        } else {
+           r = 255; g = 255; b = 255; colorWheelIndex = 0; isPureWhite = true;
+        }
+
         finalFrost = ovr.frost ? 255 : 0;
-        finalPrism1 = 0; finalPrism1Rot = 0; finalPrism2 = 0;
-        finalGobo = 0;
+        finalFocus = ovr.frost ? 150 : 64;
+        
+        finalPrism1 = ovr.prism ? 150 : 0;
+        finalPrism1Rot = ovr.prism ? 140 : 0;
+        finalPrism2 = 0;
+        finalGobo = ovr.gobo !== undefined ? ovr.gobo * 6 : 0;
         finalZoom = ovr.frost ? 0 : 128;
       }
 
@@ -284,13 +311,15 @@ export class DMXEngine {
       const cWheel = Math.floor(colorWheelIndex);
       setCh("Color", cWheel);
       setCh("Color2", cWheel);
+      setCh("ColorMacro", 0); // 0-160 single color mode
       
       setCh("Gobo", finalGobo);
+      setCh("GoboRot", 255); // 128-255 static gobo
       setCh("Prism1", finalPrism1);
       setCh("Prism1Rot", finalPrism1Rot);
       setCh("Prism2", finalPrism2);
       
-      setCh("Focus", 128);
+      setCh("Focus", finalFocus);
       setCh("Zoom", finalZoom);
 
       if (fix.type === "laser") {

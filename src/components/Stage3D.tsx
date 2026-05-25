@@ -26,6 +26,9 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
   const dragControls = useDragControls();
   const [selectedFixtureIds, setSelectedFixtureIds] = useState<string[]>([]);
   const [frost, setFrost] = useState(false);
+  const [prismMode, setPrismMode] = useState(false);
+  const [staticColor, setStaticColor] = useState<number | undefined>(undefined);
+  const [staticGobo, setStaticGobo] = useState<number | undefined>(undefined);
   
   // Room dimensions
   const [roomSize, setRoomSize] = useState<[number, number, number]>(() => {
@@ -124,36 +127,68 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
        const dy = targetPoint.y - pos.y;
        const dz = targetPoint.z - pos.z;
 
-       // Math for moving head:
-       // Hanging fixture: base normal is +Y. Head rest points -Y.
-       // Pan = angle in XZ plane.
-       const panAngle = Math.atan2(dx, dz); // -PI to PI
-       
-       // Normalized pan (0 to 1, mapped from -270 to +270 deg = 540 deg total range = Math.PI * 3)
-       let panNorm = 0.5 + (panAngle / (Math.PI * 3)); 
-       if (panNorm < 0) panNorm += 1;
-       if (panNorm > 1) panNorm -= 1;
+       const distSum = Math.sqrt(dx*dx + dy*dy + dz*dz);
+       if (distSum === 0) return;
 
-       // Tilt = angle from down vector (-Y)
-       const horizontalDist = Math.sqrt(dx*dx + dz*dz);
-       const tiltAngle = Math.atan2(horizontalDist, -dy); // 0 (straight down) to PI (straight up)
+       const currentPan16 = engine.planOverrides[id]?.pan ?? 32768;
+       const currentTilt16 = engine.planOverrides[id]?.tilt ?? 32768;
        
-       // Assuming 270 deg tilt range (Math.PI * 1.5)
-       const tiltNorm = tiltAngle / (Math.PI * 1.5); 
+       const currentAlpha = ((currentPan16 / 65535) - 0.5) * (Math.PI * 3);
+       const currentBeta = ((currentTilt16 / 65535) - 0.5) * (Math.PI * 1.5);
 
-       const pan16 = Math.max(0, Math.min(65535, Math.floor(panNorm * 65535)));
-       const tilt16 = Math.max(0, Math.min(65535, Math.floor(tiltNorm * 65535)));
+       // Base beta (always positive)
+       // dy should ideally be negative (floor is below fixture)
+       let baseBeta = Math.acos(-dy / distSum); 
+
+       // Two kinematic solutions
+       let alphaA = Math.atan2(-dz, dx);
+       let betaA = baseBeta;
+
+       let alphaB = Math.atan2(dz, -dx);
+       let betaB = -baseBeta;
+
+       const unwrap = (target: number, current: number) => {
+           let diff = target - current;
+           while (diff > Math.PI) diff -= 2 * Math.PI;
+           while (diff < -Math.PI) diff += 2 * Math.PI;
+           return current + diff;
+       };
+
+       alphaA = unwrap(alphaA, currentAlpha);
+       alphaB = unwrap(alphaB, currentAlpha);
+
+       const distA = Math.abs(alphaA - currentAlpha) + Math.abs(betaA - currentBeta);
+       const distB = Math.abs(alphaB - currentAlpha) + Math.abs(betaB - currentBeta);
+
+       let bestAlpha = alphaA;
+       let bestBeta = betaA;
+       if (distB < distA) {
+           bestAlpha = alphaB;
+           bestBeta = betaB;
+       }
+
+       let panNorm = 0.5 + (bestAlpha / (Math.PI * 3));
+       let tiltNorm = 0.5 + (bestBeta / (Math.PI * 1.5));
+
+       // Clamp
+       panNorm = Math.max(0, Math.min(1, panNorm));
+       tiltNorm = Math.max(0, Math.min(1, tiltNorm));
+
+       const pan16 = Math.floor(panNorm * 65535);
+       const tilt16 = Math.floor(tiltNorm * 65535);
 
        if (!engine.planOverrides[id]) {
-         engine.planOverrides[id] = { active: true, pan: pan16, tilt: tilt16, frost };
+         engine.planOverrides[id] = { active: true, pan: pan16, tilt: tilt16, frost, prism: prismMode, color: staticColor, gobo: staticGobo };
        } else {
          engine.planOverrides[id].pan = pan16;
          engine.planOverrides[id].tilt = tilt16;
          engine.planOverrides[id].frost = frost;
+         engine.planOverrides[id].prism = prismMode;
+         engine.planOverrides[id].color = staticColor;
+         engine.planOverrides[id].gobo = staticGobo;
        }
     });
 
-    // We just force a state update so React rerenders the UI (frost toggle isn't strictly needed to change here but we can trigger re-render)
     setFrost(f => f); 
   };
 
@@ -388,6 +423,90 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                  </div>
                </div>
 
+               <div className="flex flex-col gap-2 pt-2">
+                 <span className="text-[9px] text-gray-400">Prism (棱镜)</span>
+                 <div className="flex gap-2">
+                   <button 
+                     onClick={() => {
+                        setPrismMode(false);
+                        selectedFixtureIds.forEach(id => {
+                           if(engine.planOverrides[id]) engine.planOverrides[id].prism = false;
+                        });
+                     }}
+                     className={`flex-1 p-1.5 text-[9px] border uppercase transition-colors ${!prismMode ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-600 text-gray-500 hover:text-white'}`}
+                   >
+                     Off
+                   </button>
+                   <button 
+                     onClick={() => {
+                        setPrismMode(true);
+                        selectedFixtureIds.forEach(id => {
+                           if(engine.planOverrides[id]) engine.planOverrides[id].prism = true;
+                        });
+                     }}
+                     className={`flex-1 p-1.5 text-[9px] border uppercase transition-colors ${prismMode ? 'bg-purple-500/20 border-[#9d00ff] text-[#9d00ff]' : 'border-gray-600 text-gray-500 hover:text-white'}`}
+                   >
+                     Prism
+                   </button>
+                 </div>
+               </div>
+
+               <div className="flex flex-col gap-2 pt-2">
+                 <div className="flex justify-between">
+                    <span className="text-[9px] text-gray-400">Color (颜色)</span>
+                    <button 
+                      onClick={() => {
+                         setStaticColor(undefined);
+                         selectedFixtureIds.forEach(id => {
+                           if(engine.planOverrides[id]) engine.planOverrides[id].color = undefined;
+                         });
+                      }}
+                      className="text-[9px] text-gray-500 border border-gray-700 px-1 hover:text-white"
+                    >Audio</button>
+                 </div>
+                 <div className="flex flex-wrap gap-1">
+                   {[{n:'W', c: 0}, {n:'R', c: 9}, {n:'Y', c: 18}, {n:'B', c: 27}, {n:'G', c: 36}, {n:'P', c: 45}, {n:'O', c: 54}, {n:'C', c: 63}].map(clr => (
+                     <button
+                       key={clr.c}
+                       onClick={() => {
+                          setStaticColor(clr.c);
+                          selectedFixtureIds.forEach(id => {
+                             if(engine.planOverrides[id]) engine.planOverrides[id].color = clr.c;
+                          });
+                       }}
+                       className={`w-6 h-6 text-[9px] border transition-colors ${staticColor === clr.c ? 'border-white text-white' : 'border-gray-700 text-gray-500'}`}
+                     >{clr.n}</button>
+                   ))}
+                 </div>
+               </div>
+
+               <div className="flex flex-col gap-2 pt-2">
+                 <div className="flex justify-between">
+                    <span className="text-[9px] text-gray-400">Gobo (图案)</span>
+                    <button 
+                      onClick={() => {
+                         setStaticGobo(undefined);
+                         selectedFixtureIds.forEach(id => {
+                           if(engine.planOverrides[id]) engine.planOverrides[id].gobo = undefined;
+                         });
+                      }}
+                      className="text-[9px] text-gray-500 border border-gray-700 px-1 hover:text-white"
+                    >Audio</button>
+                 </div>
+                 <input 
+                   type="range" min="0" max="15" step="1" 
+                   value={staticGobo ?? 0}
+                   onChange={e => {
+                      const val = parseInt(e.target.value);
+                      setStaticGobo(val);
+                      selectedFixtureIds.forEach(id => {
+                         if(engine.planOverrides[id]) engine.planOverrides[id].gobo = val;
+                      });
+                   }}
+                   className="w-full accent-[#00f2ff]"
+                 />
+               </div>
+
                <div className="text-[9px] text-gray-400 mt-2 leading-relaxed">
                  Use the transform gizmo on the selected fixture to adjust its mounting position (XYZ). Click the floor to aim locked fixtures.
                </div>
@@ -415,14 +534,14 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, ovr, roo
   const panNorm = p / 65535;
   const tiltNorm = t / 65535;
   const panAngle = (panNorm - 0.5) * Math.PI * 3;
-  const tiltAngle = tiltNorm * Math.PI * 1.5;
+  const tiltAngle = (tiltNorm - 0.5) * Math.PI * 1.5;
 
   // Direction vector. Base points -Y.
   const distance = 15; // beam render dist
   const dirY = -Math.cos(tiltAngle); 
   const r = Math.sin(tiltAngle);
-  const dirX = Math.sin(panAngle) * r;
-  const dirZ = Math.cos(panAngle) * r;
+  const dirX = r * Math.cos(panAngle);
+  const dirZ = -r * Math.sin(panAngle);
 
   const targetPoint = new THREE.Vector3(pos.x + dirX * distance, pos.y + dirY * distance, pos.z + dirZ * distance);
   const points = [new THREE.Vector3(pos.x, pos.y, pos.z), targetPoint];
