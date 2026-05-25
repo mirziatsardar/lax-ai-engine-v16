@@ -354,9 +354,30 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
               </div>
            </div>
 
+           <div className="border border-cyan/20 p-3 bg-black flex flex-col gap-2 max-h-48 overflow-y-auto">
+              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold sticky top-0 bg-black py-1 z-10">Fixture List(设备列表)</h3>
+              <div className="flex flex-col gap-1">
+                {movableFixtures.map(f => (
+                  <button 
+                    key={f.id}
+                    onClick={(e) => {
+                       if (e.shiftKey) {
+                           setSelectedFixtureIds(prev => prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]);
+                       } else {
+                           setSelectedFixtureIds([f.id]);
+                       }
+                    }}
+                    className={`text-left px-2 py-1.5 text-[9px] border transition-colors truncate ${selectedFixtureIds.includes(f.id) ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-800 text-gray-400 hover:border-cyan/50 hover:bg-cyan/10'}`}
+                  >
+                    U{f.universe}.{f.addr} - {f.name}
+                  </button>
+                ))}
+              </div>
+           </div>
+
            {selectedFixtureIds.length === 0 ? (
              <div className="flex flex-col gap-4 text-[10px] text-gray-500 border border-gray-800 p-4 text-center">
-               <span>Select a fixture from the 3D view to override and target.</span>
+               <span>Select a fixture from the list or 3D view to override and target.</span>
                <button onClick={() => setSelectedFixtureIds(movableFixtures.map(f => f.id))} className="px-2 py-2 border border-cyan/30 text-cyan-500 hover:bg-cyan/10 uppercase tracking-widest text-[9px]">Select All</button>
              </div>
            ) : (
