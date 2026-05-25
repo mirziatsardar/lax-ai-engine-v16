@@ -29,6 +29,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
   const [prismMode, setPrismMode] = useState(false);
   const [staticColor, setStaticColor] = useState<number | undefined>(undefined);
   const [staticGobo, setStaticGobo] = useState<number | undefined>(undefined);
+  const [snapToGrid, setSnapToGrid] = useState(true);
   
   // Room dimensions
   const [roomSize, setRoomSize] = useState<[number, number, number]>(() => {
@@ -309,6 +310,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                     pos={pos}
                     isSelected={isSelected}
                     isOverrideActive={isOverrideActive}
+                    snapToGrid={snapToGrid}
                     ovr={engine.planOverrides[f.id]}
                     roomSize={roomSize}
                     onClick={(e) => {
@@ -337,7 +339,13 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
         <div className="w-64 flex flex-col gap-4 overflow-auto">
            
            <div className="border border-cyan/20 p-3 bg-black">
-              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 font-bold">Space Dimensions(空间大小)</h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Space Dimensions(空间大小)</h3>
+                <label className="flex items-center gap-1 text-[9px] text-cyan-500 cursor-pointer">
+                  <input type="checkbox" checked={snapToGrid} onChange={e => setSnapToGrid(e.target.checked)} className="accent-cyan-500" />
+                  Snap to Grid
+                </label>
+              </div>
               <div className="grid grid-cols-3 gap-2 text-[9px]">
                 <div>
                   <label className="text-cyan-600 mb-1 block">W (X)</label>
@@ -540,7 +548,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
 }
 
 // Subcomponent for each fixture body and its target line
-function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, ovr, roomSize, onClick, onUpdatePos }: any) {
+function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGrid, ovr, roomSize, onClick, onUpdatePos }: any) {
   const transformRef = useRef<any>(null);
   const meshRef = useRef<THREE.Mesh>(null);
 
@@ -574,6 +582,7 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, ovr, roo
            object={meshRef as any} 
            mode="translate" 
            size={0.6}
+           translationSnap={snapToGrid ? 0.5 : null}
            onMouseUp={(e) => {
               if (meshRef.current) {
                 onUpdatePos({
