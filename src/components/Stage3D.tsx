@@ -28,7 +28,16 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
   const [frost, setFrost] = useState(false);
   
   // Room dimensions
-  const [roomSize, setRoomSize] = useState<[number, number, number]>([10, 5, 10]); // width(x), height(y), depth(z)
+  const [roomSize, setRoomSize] = useState<[number, number, number]>(() => {
+    const saved = localStorage.getItem('lax_room_size_3d');
+    if (saved) return JSON.parse(saved);
+    return [10, 5, 10]; // width(x), height(y), depth(z)
+  });
+
+  const updateRoomSize = (newSize: [number, number, number]) => {
+    setRoomSize(newSize);
+    localStorage.setItem('lax_room_size_3d', JSON.stringify(newSize));
+  };
 
   // Track fixture positions visually 
   const [fixturePositions, setFixturePositions] = useState<Record<string, Fixture3DPosition>>({});
@@ -41,7 +50,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
   }, [engine]);
 
   const movableFixtures = useMemo(() => 
-    fixtures.filter(f => f.channels && (f.channels['Pan'] !== undefined || f.channels['PanFine'] !== undefined)),
+    fixtures.filter(f => f.type === 'spot'),
     [fixtures]
   );
 
@@ -52,15 +61,45 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
     let needsSave = false;
     movableFixtures.forEach((f, i) => {
       if (!poss[f.id]) {
-        // Default hang from ceiling
-        poss[f.id] = {
-          x: (i % 5) * 1.5 - 3,
-          y: roomSize[1], 
-          z: Math.floor(i / 5) * 1.5 - 3
-        };
+        const w = roomSize[0];
+        const h = roomSize[1];
+        const d = roomSize[2];
+
+        // Spread by default
+        let x = (i - movableFixtures.length / 2) * (w / Math.max(1, movableFixtures.length));
+        let y = h;
+        let z = 0;
+
+        if (f.position?.includes('Left')) {
+          x = -w * 0.3;
+        } else if (f.position?.includes('Right')) {
+          x = w * 0.3;
+        }
+
+        if (f.position?.includes('Floor')) {
+          y = 0;
+        } else if (f.position?.includes('Ceiling')) {
+          y = h;
+        } else if (f.position?.includes('Wall')) {
+          y = h / 2;
+          z = -d * 0.4;
+        }
+
+        poss[f.id] = { x, y, z };
         needsSave = true;
+      } else {
+        // Clamp existing to bounds
+        let p = poss[f.id];
+        let clampedX = Math.max(-roomSize[0] / 2, Math.min(roomSize[0] / 2, p.x));
+        let clampedY = Math.max(0, Math.min(roomSize[1], p.y));
+        let clampedZ = Math.max(-roomSize[2] / 2, Math.min(roomSize[2] / 2, p.z));
+        if (clampedX !== p.x || clampedY !== p.y || clampedZ !== p.z) {
+          poss[f.id] = { x: clampedX, y: clampedY, z: clampedZ };
+          needsSave = true;
+        }
       }
     });
+
     setFixturePositions(poss);
     if (needsSave) {
       localStorage.setItem('lax_fixture_pos_3d', JSON.stringify(poss));
@@ -120,7 +159,12 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
 
   const updateFixturePos = (id: string, newPos: Fixture3DPosition) => {
      setFixturePositions(prev => {
-       const next = { ...prev, [id]: newPos };
+       const clamped = {
+         x: Math.max(-roomSize[0] / 2, Math.min(roomSize[0] / 2, newPos.x)),
+         y: Math.max(0, Math.min(roomSize[1], newPos.y)),
+         z: Math.max(-roomSize[2] / 2, Math.min(roomSize[2] / 2, newPos.z)),
+       };
+       const next = { ...prev, [id]: clamped };
        localStorage.setItem('lax_fixture_pos_3d', JSON.stringify(next));
        return next;
      });
@@ -262,15 +306,15 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
               <div className="grid grid-cols-3 gap-2 text-[9px]">
                 <div>
                   <label className="text-cyan-600 mb-1 block">W (X)</label>
-                  <input type="number" value={roomSize[0]} onChange={e => setRoomSize([Number(e.target.value), roomSize[1], roomSize[2]])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
+                  <input type="number" step="0.5" value={roomSize[0]} onChange={e => updateRoomSize([Number(e.target.value), roomSize[1], roomSize[2]])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
                 </div>
                 <div>
                   <label className="text-cyan-600 mb-1 block">H (Y)</label>
-                  <input type="number" value={roomSize[1]} onChange={e => setRoomSize([roomSize[0], Number(e.target.value), roomSize[2]])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
+                  <input type="number" step="0.5" value={roomSize[1]} onChange={e => updateRoomSize([roomSize[0], Number(e.target.value), roomSize[2]])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
                 </div>
                 <div>
                   <label className="text-cyan-600 mb-1 block">D (Z)</label>
-                  <input type="number" value={roomSize[2]} onChange={e => setRoomSize([roomSize[0], roomSize[1], Number(e.target.value)])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
+                  <input type="number" step="0.5" value={roomSize[2]} onChange={e => updateRoomSize([roomSize[0], roomSize[1], Number(e.target.value)])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
                 </div>
               </div>
            </div>
@@ -423,3 +467,4 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, ovr, roo
     </>
   );
 }
+
