@@ -1,4 +1,5 @@
 import { ActiveFixture, MovementMode, ColorMode, PhaseMode } from '../types';
+import * as THREE from 'three';
 
 export type DimmerMode = "sync" | "pulse" | "stack";
 export type AdvancedColorMode = ColorMode | "chase";
@@ -19,11 +20,61 @@ export class DMXEngine {
   // fixtureId (universe_addr) -> override config
   public planOverrides: Record<string, { active: boolean, pan: number, tilt: number, frost: boolean, color?: number, gobo?: number, prism?: boolean }> = {};
   
+  public roomSize: [number, number, number] = [10, 5, 10];
+  private fixturePosCache: Record<string, any> = {};
+  private lastCacheTime = 0;
+
   private fixtureStates: Record<string, { pan16: number, tilt16: number, dimmer: number }> = {};
   private goboIdx = 0;
   private colorIdx = 0;
 
-  constructor() {}
+  constructor() {
+    this.refresh3DPositions();
+  }
+
+  private refresh3DPositions() {
+    try {
+      const sp = localStorage.getItem('lax_fixture_pos_3d');
+      if (sp) this.fixturePosCache = JSON.parse(sp);
+      const sr = localStorage.getItem('lax_room_size_3d');
+      if (sr) this.roomSize = JSON.parse(sr);
+    } catch(e) {}
+    this.lastCacheTime = Date.now();
+  }
+
+  private getCenterAim(fixtureId: string): { pan: number, tilt: number } {
+    const pos = this.fixturePosCache[fixtureId];
+    if (!pos) return { pan: 32768, tilt: 32768 };
+
+    // Target is somewhat to the center of the room, maybe slightly lifted
+    let dx = 0 - pos.x;
+    let dy = (this.roomSize[1] * 0.2) - pos.y;
+    let dz = 0 - pos.z;
+
+    if (pos.rx || pos.ry || pos.rz) {
+       const euler = new THREE.Euler(pos.rx || 0, pos.ry || 0, pos.rz || 0, 'XYZ');
+       const vec = new THREE.Vector3(dx, dy, dz);
+       vec.applyEuler(new THREE.Euler(-euler.x, -euler.y, -euler.z, 'ZYX')); // Inverse rotation
+       dx = vec.x;
+       dy = vec.y;
+       dz = vec.z;
+    }
+
+    const distSum = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    if (distSum === 0) return { pan: 32768, tilt: 32768 };
+
+    // Default base is -Y
+    let baseBeta = Math.acos(-dy / distSum); 
+    let alphaA = Math.atan2(-dz, dx);
+    // Unmapped:
+    const panNorm = (alphaA / (Math.PI * 3)) + 0.5;
+    const tiltNorm = baseBeta / (Math.PI * 1.5);
+
+    return { 
+      pan: Math.max(0, Math.min(65535, Math.floor(panNorm * 65535))), 
+      tilt: Math.max(0, Math.min(65535, Math.floor(tiltNorm * 65535))) 
+    };
+  }
 
   update(
     fixtures: ActiveFixture[], 
@@ -42,6 +93,9 @@ export class DMXEngine {
     },
     isSilence: boolean = false
   ): Record<number, number[]> {
+    if (Date.now() - this.lastCacheTime > 2000) {
+      this.refresh3DPositions();
+    }
     const universes: Record<number, number[]> = {};
     
     const effectiveEnergy = isSilence ? 0 : energy;
@@ -130,39 +184,40 @@ export class DMXEngine {
       else if (this.currentPhaseMode === "odd_even_offset") phaseOffset = idx % 2 === 0 ? Math.PI : 0;
 
       // Motion Logic from Python
-      let targetPan16 = 32768;
-      let targetTilt16 = 32768;
+      const centerAim = this.getCenterAim(fix.id);
+      let targetPan16 = centerAim.pan;
+      let targetTilt16 = centerAim.tilt;
       const ampP = isChillMode ? 10000 : 20000;
       const ampT = isChillMode ? 6000 : 16000;
 
       if (!isSilence) {
         switch(this.currentMove) {
           case "sweep":
-            targetPan16 = 32768 + ampP * Math.sin(this.currentPhase);
-            targetTilt16 = 32768 + ampT * Math.cos(this.currentPhase * 1.5);
+            targetPan16 = centerAim.pan + ampP * Math.sin(this.currentPhase);
+            targetTilt16 = centerAim.tilt + ampT * Math.cos(this.currentPhase * 1.5);
             break;
           case "wave":
-            targetPan16 = 32768 + ampP * Math.sin(this.currentPhase + phaseOffset);
-            targetTilt16 = 32768 + ampT * Math.cos(this.currentPhase + phaseOffset);
+            targetPan16 = centerAim.pan + ampP * Math.sin(this.currentPhase + phaseOffset);
+            targetTilt16 = centerAim.tilt + ampT * Math.cos(this.currentPhase + phaseOffset);
             break;
           case "circle":
-            targetPan16 = 32768 + ampP * Math.cos(this.currentPhase + phaseOffset);
-            targetTilt16 = 32768 + ampT * Math.sin(this.currentPhase + phaseOffset);
+            targetPan16 = centerAim.pan + ampP * Math.cos(this.currentPhase + phaseOffset);
+            targetTilt16 = centerAim.tilt + ampT * Math.sin(this.currentPhase + phaseOffset);
             break;
           case "symmetry":
             const direction = idx <= totalOfType / 2 ? 1 : -1;
-            targetPan16 = 32768 + direction * ampP * Math.sin(this.currentPhase + phaseOffset / 2);
-            targetTilt16 = 32768 + ampT * Math.cos(this.currentPhase);
+            targetPan16 = centerAim.pan + direction * ampP * Math.sin(this.currentPhase + phaseOffset / 2);
+            targetTilt16 = centerAim.tilt + ampT * Math.cos(this.currentPhase);
             break;
           case "cross":
-            targetPan16 = 32768 + ampP * Math.sin(this.currentPhase + (idx % 2 === 0 ? Math.PI : 0));
-            targetTilt16 = 32768 + ampT * Math.cos(this.currentPhase);
+            targetPan16 = centerAim.pan + ampP * Math.sin(this.currentPhase + (idx % 2 === 0 ? Math.PI : 0));
+            targetTilt16 = centerAim.tilt + ampT * Math.cos(this.currentPhase);
             break;
           case "fan":
             const spreadCount = totalOfType - 1 || 1;
             const spread = 40000 / spreadCount;
-            targetPan16 = 32768 - 20000 + (idx - 1) * (totalOfType > 1 ? spread : 0);
-            targetTilt16 = 32768 + ampT * Math.cos(this.currentPhase + phaseOffset);
+            targetPan16 = centerAim.pan - 20000 + (idx - 1) * (totalOfType > 1 ? spread : 0);
+            targetTilt16 = centerAim.tilt + ampT * Math.cos(this.currentPhase + phaseOffset);
             break;
         }
       }

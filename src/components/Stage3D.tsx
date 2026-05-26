@@ -20,6 +20,9 @@ interface Fixture3DPosition {
   x: number;
   y: number;
   z: number;
+  rx?: number;
+  ry?: number;
+  rz?: number;
 }
 
 export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
@@ -30,6 +33,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
   const [staticColor, setStaticColor] = useState<number | undefined>(undefined);
   const [staticGobo, setStaticGobo] = useState<number | undefined>(undefined);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
   
   // Room dimensions
   const [roomSize, setRoomSize] = useState<[number, number, number]>(() => {
@@ -74,6 +78,8 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
         let y = h;
         let z = 0;
 
+        let rx = 0; let ry = 0; let rz = 0;
+
         if (f.position?.includes('Left')) {
           x = -w * 0.3;
         } else if (f.position?.includes('Right')) {
@@ -82,14 +88,17 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
 
         if (f.position?.includes('Floor')) {
           y = 0;
+          rx = Math.PI; // Face up
         } else if (f.position?.includes('Ceiling')) {
           y = h;
+          // default face down
         } else if (f.position?.includes('Wall')) {
           y = h / 2;
           z = -d * 0.4;
+          rx = Math.PI / 2; // Face forward
         }
 
-        poss[f.id] = { x, y, z };
+        poss[f.id] = { x, y, z, rx, ry, rz };
         needsSave = true;
       } else {
         // Clamp existing to bounds
@@ -97,8 +106,8 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
         let clampedX = Math.max(-roomSize[0] / 2, Math.min(roomSize[0] / 2, p.x));
         let clampedY = Math.max(0, Math.min(roomSize[1], p.y));
         let clampedZ = Math.max(-roomSize[2] / 2, Math.min(roomSize[2] / 2, p.z));
-        if (clampedX !== p.x || clampedY !== p.y || clampedZ !== p.z) {
-          poss[f.id] = { x: clampedX, y: clampedY, z: clampedZ };
+        if (clampedX !== p.x || clampedY !== p.y || clampedZ !== p.z || p.rx === undefined) {
+          poss[f.id] = { x: clampedX, y: clampedY, z: clampedZ, rx: p.rx || 0, ry: p.ry || 0, rz: p.rz || 0 };
           needsSave = true;
         }
       }
@@ -124,9 +133,19 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
        if (!pos) return;
 
        // Vector from fixture to target
-       const dx = targetPoint.x - pos.x;
-       const dy = targetPoint.y - pos.y;
-       const dz = targetPoint.z - pos.z;
+       let dx = targetPoint.x - pos.x;
+       let dy = targetPoint.y - pos.y;
+       let dz = targetPoint.z - pos.z;
+
+       // Convert vector to fixture's local space based on its rotation
+       if (pos.rx || pos.ry || pos.rz) {
+          const euler = new THREE.Euler(pos.rx || 0, pos.ry || 0, pos.rz || 0, 'XYZ');
+          const vec = new THREE.Vector3(dx, dy, dz);
+          vec.applyEuler(new THREE.Euler(-euler.x, -euler.y, -euler.z, 'ZYX')); // Inverse rotation
+          dx = vec.x;
+          dy = vec.y;
+          dz = vec.z;
+       }
 
        const distSum = Math.sqrt(dx*dx + dy*dy + dz*dz);
        if (distSum === 0) return;
@@ -199,6 +218,9 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
          x: Math.max(-roomSize[0] / 2, Math.min(roomSize[0] / 2, newPos.x)),
          y: Math.max(0, Math.min(roomSize[1], newPos.y)),
          z: Math.max(-roomSize[2] / 2, Math.min(roomSize[2] / 2, newPos.z)),
+         rx: newPos.rx ?? prev[id]?.rx ?? 0,
+         ry: newPos.ry ?? prev[id]?.ry ?? 0,
+         rz: newPos.rz ?? prev[id]?.rz ?? 0,
        };
        const next = { ...prev, [id]: clamped };
        localStorage.setItem('lax_fixture_pos_3d', JSON.stringify(next));
@@ -311,6 +333,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                     isSelected={isSelected}
                     isOverrideActive={isOverrideActive}
                     snapToGrid={snapToGrid}
+                    transformMode={transformMode}
                     ovr={engine.planOverrides[f.id]}
                     roomSize={roomSize}
                     onClick={(e) => {
@@ -338,6 +361,24 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
         {/* Right Side: Options */}
         <div className="w-64 flex flex-col gap-4 overflow-auto">
            
+           <div className="border border-cyan/20 p-3 bg-black">
+              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Transform Tool (调整工具)</h3>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setTransformMode('translate')} 
+                  className={`flex-1 p-1.5 text-[9px] border uppercase transition-colors ${transformMode === 'translate' ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-600 text-gray-500 hover:text-white'}`}
+                >
+                  Move (移动)
+                </button>
+                <button 
+                  onClick={() => setTransformMode('rotate')} 
+                  className={`flex-1 p-1.5 text-[9px] border uppercase transition-colors ${transformMode === 'rotate' ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-600 text-gray-500 hover:text-white'}`}
+                >
+                  Rotate (旋转)
+                </button>
+              </div>
+           </div>
+
            <div className="border border-cyan/20 p-3 bg-black">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Space Dimensions(空间大小)</h3>
@@ -548,7 +589,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
 }
 
 // Subcomponent for each fixture body and its target line
-function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGrid, ovr, roomSize, onClick, onUpdatePos }: any) {
+function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGrid, transformMode, ovr, roomSize, onClick, onUpdatePos }: any) {
   const transformRef = useRef<any>(null);
   const meshRef = useRef<THREE.Mesh>(null);
 
@@ -580,15 +621,19 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGr
       {isSelected && (
         <TransformControls 
            object={meshRef as any} 
-           mode="translate" 
+           mode={transformMode} 
            size={0.6}
            translationSnap={snapToGrid ? 0.5 : null}
+           rotationSnap={snapToGrid ? Math.PI / 4 : null}
            onMouseUp={(e) => {
               if (meshRef.current) {
                 onUpdatePos({
                   x: meshRef.current.position.x,
                   y: meshRef.current.position.y,
                   z: meshRef.current.position.z,
+                  rx: meshRef.current.rotation.x,
+                  ry: meshRef.current.rotation.y,
+                  rz: meshRef.current.rotation.z,
                 });
               }
            }}
@@ -597,6 +642,7 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGr
       <mesh 
         ref={meshRef} 
         position={[pos.x, pos.y, pos.z]} 
+        rotation={[pos.rx || 0, pos.ry || 0, pos.rz || 0]}
         onClick={onClick}
       >
         <boxGeometry args={[0.3, 0.3, 0.3]} />
