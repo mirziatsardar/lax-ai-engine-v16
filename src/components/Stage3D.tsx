@@ -29,11 +29,9 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
   const dragControls = useDragControls();
   const [selectedFixtureIds, setSelectedFixtureIds] = useState<string[]>([]);
   const [frost, setFrost] = useState(false);
-  const [prismMode, setPrismMode] = useState(false);
   const [staticColor, setStaticColor] = useState<number | undefined>(undefined);
   const [staticGobo, setStaticGobo] = useState<number | undefined>(undefined);
   const [snapToGrid, setSnapToGrid] = useState(true);
-  const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
   
   // Room dimensions
   const [roomSize, setRoomSize] = useState<[number, number, number]>(() => {
@@ -198,12 +196,11 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
        const tilt16 = Math.floor(tiltNorm * 65535);
 
        if (!engine.planOverrides[id]) {
-         engine.planOverrides[id] = { active: true, pan: pan16, tilt: tilt16, frost, prism: prismMode, color: staticColor, gobo: staticGobo };
+         engine.planOverrides[id] = { active: true, pan: pan16, tilt: tilt16, frost, color: staticColor, gobo: staticGobo };
        } else {
          engine.planOverrides[id].pan = pan16;
          engine.planOverrides[id].tilt = tilt16;
          engine.planOverrides[id].frost = frost;
-         engine.planOverrides[id].prism = prismMode;
          engine.planOverrides[id].color = staticColor;
          engine.planOverrides[id].gobo = staticGobo;
        }
@@ -333,7 +330,6 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                     isSelected={isSelected}
                     isOverrideActive={isOverrideActive}
                     snapToGrid={snapToGrid}
-                    transformMode={transformMode}
                     ovr={engine.planOverrides[f.id]}
                     roomSize={roomSize}
                     onClick={(e) => {
@@ -362,20 +358,65 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
         <div className="w-64 flex flex-col gap-4 overflow-auto">
            
            <div className="border border-cyan/20 p-3 bg-black">
-              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Transform Tool (调整工具)</h3>
+              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Base Direction (安装方向)</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <button 
+                  onClick={() => {
+                     selectedFixtureIds.forEach(id => {
+                        updateFixturePos(id, { ...fixturePositions[id], rx: Math.PI, ry: 0, rz: 0 });
+                     });
+                  }} 
+                  className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
+                >
+                  UP (向上)
+                </button>
+                <button 
+                  onClick={() => {
+                     selectedFixtureIds.forEach(id => {
+                        updateFixturePos(id, { ...fixturePositions[id], rx: 0, ry: 0, rz: 0 });
+                     });
+                  }} 
+                  className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
+                >
+                  DOWN (向下)
+                </button>
+                <button 
+                  onClick={() => {
+                     selectedFixtureIds.forEach(id => {
+                        updateFixturePos(id, { ...fixturePositions[id], rx: 0, ry: 0, rz: -Math.PI/2 });
+                     });
+                  }} 
+                  className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
+                >
+                  LEFT (向左)
+                </button>
+                <button 
+                  onClick={() => {
+                     selectedFixtureIds.forEach(id => {
+                        updateFixturePos(id, { ...fixturePositions[id], rx: 0, ry: 0, rz: Math.PI/2 });
+                     });
+                  }} 
+                  className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
+                >
+                  RIGHT (向右)
+                </button>
+              </div>
+           </div>
+
+           <div className="border border-cyan/20 p-3 bg-black">
+              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Zero Aim (光束归零)</h3>
               <div className="flex gap-2">
-                <button 
-                  onClick={() => setTransformMode('translate')} 
-                  className={`flex-1 p-1.5 text-[9px] border uppercase transition-colors ${transformMode === 'translate' ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-600 text-gray-500 hover:text-white'}`}
-                >
-                  Move (移动)
-                </button>
-                <button 
-                  onClick={() => setTransformMode('rotate')} 
-                  className={`flex-1 p-1.5 text-[9px] border uppercase transition-colors ${transformMode === 'rotate' ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-600 text-gray-500 hover:text-white'}`}
-                >
-                  Rotate (旋转)
-                </button>
+                 <button 
+                   onClick={() => {
+                      const targetIds = selectedFixtureIds.length > 0 ? selectedFixtureIds : fixtures.map(f => f.id);
+                      targetIds.forEach(id => {
+                         engine.planOverrides[id] = { ...engine.planOverrides[id], active: true, pan: 32768, tilt: 32768, color: undefined, gobo: undefined, frost: false };
+                      });
+                   }}
+                   className="w-full p-2 text-[10px] border border-[#00f2ff] text-[#00f2ff] hover:bg-[#00f2ff]/20 transition-all font-bold tracking-widest uppercase"
+                 >
+                   Zero Selected/All (50% / 50%)
+                 </button>
               </div>
            </div>
 
@@ -494,34 +535,6 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                </div>
 
                <div className="flex flex-col gap-2 pt-2">
-                 <span className="text-[9px] text-gray-400">Prism (棱镜)</span>
-                 <div className="flex gap-2">
-                   <button 
-                     onClick={() => {
-                        setPrismMode(false);
-                        selectedFixtureIds.forEach(id => {
-                           if(engine.planOverrides[id]) engine.planOverrides[id].prism = false;
-                        });
-                     }}
-                     className={`flex-1 p-1.5 text-[9px] border uppercase transition-colors ${!prismMode ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-600 text-gray-500 hover:text-white'}`}
-                   >
-                     Off
-                   </button>
-                   <button 
-                     onClick={() => {
-                        setPrismMode(true);
-                        selectedFixtureIds.forEach(id => {
-                           if(engine.planOverrides[id]) engine.planOverrides[id].prism = true;
-                        });
-                     }}
-                     className={`flex-1 p-1.5 text-[9px] border uppercase transition-colors ${prismMode ? 'bg-purple-500/20 border-[#9d00ff] text-[#9d00ff]' : 'border-gray-600 text-gray-500 hover:text-white'}`}
-                   >
-                     Prism
-                   </button>
-                 </div>
-               </div>
-
-               <div className="flex flex-col gap-2 pt-2">
                  <div className="flex justify-between">
                     <span className="text-[9px] text-gray-400">Color (颜色)</span>
                     <button 
@@ -589,7 +602,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
 }
 
 // Subcomponent for each fixture body and its target line
-function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGrid, transformMode, ovr, roomSize, onClick, onUpdatePos }: any) {
+function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGrid, ovr, roomSize, onClick, onUpdatePos }: any) {
   const transformRef = useRef<any>(null);
   const meshRef = useRef<THREE.Mesh>(null);
 
@@ -621,19 +634,18 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGr
       {isSelected && (
         <TransformControls 
            object={meshRef as any} 
-           mode={transformMode} 
+           mode="translate" 
            size={0.6}
            translationSnap={snapToGrid ? 0.5 : null}
-           rotationSnap={snapToGrid ? Math.PI / 4 : null}
            onMouseUp={(e) => {
               if (meshRef.current) {
                 onUpdatePos({
                   x: meshRef.current.position.x,
                   y: meshRef.current.position.y,
                   z: meshRef.current.position.z,
-                  rx: meshRef.current.rotation.x,
-                  ry: meshRef.current.rotation.y,
-                  rz: meshRef.current.rotation.z,
+                  rx: pos.rx,
+                  ry: pos.ry,
+                  rz: pos.rz,
                 });
               }
            }}

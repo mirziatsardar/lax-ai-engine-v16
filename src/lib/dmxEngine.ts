@@ -16,9 +16,11 @@ export class DMXEngine {
   public currentPhaseMode: PhaseMode = "gradient";
   public isRandomMode = true;
   
+  public globalPrism: boolean | 'auto' = 'auto';
+  
   public planModeActive = false;
   // fixtureId (universe_addr) -> override config
-  public planOverrides: Record<string, { active: boolean, pan: number, tilt: number, frost: boolean, color?: number, gobo?: number, prism?: boolean }> = {};
+  public planOverrides: Record<string, { active: boolean, pan: number, tilt: number, frost: boolean, color?: number, gobo?: number }> = {};
   
   public roomSize: [number, number, number] = [10, 5, 10];
   private fixturePosCache: Record<string, any> = {};
@@ -292,7 +294,9 @@ export class DMXEngine {
 
       finalShutter = baseShutter;
 
-      const prismActive = climaxMode || (energy > 0.8 && trebleHit);
+      const prismActive = this.globalPrism === 'auto' 
+        ? (climaxMode || (energy > 0.8 && trebleHit))
+        : this.globalPrism;
       
       // BEAM295W Gobo: 0-97 scale per 6 values = static gobos (16 gobos max)
       // We map this.goboIdx (which cycles) to the static gobo wheels
@@ -334,8 +338,6 @@ export class DMXEngine {
         finalFrost = ovr.frost ? 255 : 0;
         finalFocus = ovr.frost ? 150 : 64;
         
-        finalPrism1 = ovr.prism ? 150 : 0;
-        finalPrism1Rot = ovr.prism ? 140 : 0;
         finalPrism2 = 0;
         finalGobo = ovr.gobo !== undefined ? ovr.gobo * 6 : 0;
         finalZoom = ovr.frost ? 0 : 128;

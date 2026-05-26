@@ -283,12 +283,20 @@ export default function App() {
   const [audioAdaptiveMult, setAudioAdaptiveMult] = useState(2.0);
 
   // Dynamic Engine Stats
-  const [engineState, setEngineState] = useState({
+  const [engineState, setEngineState] = useState<{
+    move: string,
+    color: string,
+    dimmer: string,
+    phase: string,
+    isRandom: boolean,
+    globalPrism: boolean | 'auto'
+  }>({
     move: "circle",
     color: "rainbow",
     dimmer: "sync",
     phase: "gradient",
-    isRandom: true
+    isRandom: true,
+    globalPrism: "auto"
   });
 
   // Settings
@@ -361,7 +369,8 @@ export default function App() {
         color: dmxEngine.currentColor,
         dimmer: dmxEngine.currentDimmerMode,
         phase: dmxEngine.currentPhaseMode,
-        isRandom: dmxEngine.isRandomMode
+        isRandom: dmxEngine.isRandomMode,
+        globalPrism: dmxEngine.globalPrism
       });
     }, 100);
     return () => clearInterval(timer);
@@ -492,7 +501,8 @@ export default function App() {
           color: dmxEngine.currentColor,
           dimmer: dmxEngine.currentDimmerMode,
           phase: dmxEngine.currentPhaseMode,
-          isRandom: dmxEngine.isRandomMode
+          isRandom: dmxEngine.isRandomMode,
+          globalPrism: dmxEngine.globalPrism
         });
 
         // Throttled sending (~40fps)
@@ -1117,6 +1127,22 @@ export default function App() {
                   {t.modes.color[c]}
                 </button>
               ))}
+
+              <h3 className="text-[10px] uppercase tracking-widest text-[#00f2ff] mt-6 mb-2 border-b border-cyan/20 pb-1">Prism (棱镜状态)</h3>
+              <div className="flex gap-1 text-[9px] font-mono">
+                {(['auto', true, false] as const).map(p => (
+                  <button
+                    key={String(p)}
+                    onClick={() => {
+                      dmxEngine.globalPrism = p;
+                      setEngineState(s => ({ ...s, globalPrism: p }));
+                    }}
+                    className={`flex-1 p-1 border uppercase transition-all ${dmxEngine.globalPrism === p ? "bg-purple-500/20 border-[#9d00ff] text-[#9d00ff]" : "border-gray-700 text-gray-500"}`}
+                  >
+                    {p === 'auto' ? 'Auto' : p ? 'On' : 'Off'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mt-6 mb-4 border-b border-cyan/20 pb-2">{t.phase_offsets}</h3>
