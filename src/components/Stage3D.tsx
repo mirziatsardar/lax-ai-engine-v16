@@ -265,7 +265,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
           <Canvas camera={{ position: [0, roomSize[1] + 2, roomSize[2] + 2], fov: 50 }}>
             <ambientLight intensity={0.5} />
             <OrbitControls makeDefault />
-            <Grid infiniteGrid fadeDistance={40} sectionColor="#00f2ff" cellColor="#00f2ff" sectionSize={1} cellSize={0.5} opacity={0.2} />
+            <Grid infiniteGrid fadeDistance={40} sectionColor="#00f2ff55" cellColor="#00f2ff33" sectionSize={1} cellSize={0.5} />
             
             {/* Room Bounds Visualization */}
             <mesh position={[0, roomSize[1]/2, 0]}>
@@ -378,7 +378,27 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                   }} 
                   className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
                 >
-                  DOWN (向下)
+                  DOWN (向下/正常)
+                </button>
+                <button 
+                  onClick={() => {
+                     selectedFixtureIds.forEach(id => {
+                        updateFixturePos(id, { ...fixturePositions[id], rx: -Math.PI/2, ry: 0, rz: 0 });
+                     });
+                  }} 
+                  className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
+                >
+                  NORTH (北/向后)
+                </button>
+                <button 
+                  onClick={() => {
+                     selectedFixtureIds.forEach(id => {
+                        updateFixturePos(id, { ...fixturePositions[id], rx: Math.PI/2, ry: 0, rz: 0 });
+                     });
+                  }} 
+                  className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
+                >
+                  SOUTH (南/向前)
                 </button>
                 <button 
                   onClick={() => {
@@ -388,7 +408,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                   }} 
                   className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
                 >
-                  LEFT (向左)
+                  EAST (东/向右)
                 </button>
                 <button 
                   onClick={() => {
@@ -398,8 +418,43 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                   }} 
                   className="p-1.5 text-[9px] border bg-[#111] border-gray-600 text-gray-400 hover:text-white transition-colors"
                 >
-                  RIGHT (向右)
+                  WEST (西/向左)
                 </button>
+              </div>
+           </div>
+
+           <div className="border border-cyan/20 p-3 bg-black">
+              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Quick Position (固定摆放位置)</h3>
+              
+              <div className="mb-2">
+                <span className="text-[8px] text-gray-400">Y-Axis (上下)</span>
+                <div className="grid grid-cols-2 gap-1 mb-1">
+                   <button onClick={() => {
+                      selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], y: roomSize[1] }));
+                   }} className="p-1.5 text-[9px] border bg-cyan-900/20 border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20">Ceiling (天花板)</button>
+                   <button onClick={() => {
+                      selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], y: 0 }));
+                   }} className="p-1.5 text-[9px] border bg-cyan-900/20 border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20">Floor (地上)</button>
+                </div>
+              </div>
+
+              <div className="mb-2">
+                <span className="text-[8px] text-gray-400">X-Axis (左右)</span>
+                <div className="grid grid-cols-5 gap-0.5">
+                   <button onClick={() => selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], x: -roomSize[0]*0.4 }))} className="px-0 py-1 text-[8px] border border-gray-600 text-gray-400">左(L)</button>
+                   <button onClick={() => selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], x: -roomSize[0]*0.2 }))} className="px-0 py-1 text-[8px] border border-gray-600 text-gray-400">左中</button>
+                   <button onClick={() => selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], x: 0 }))} className="px-0 py-1 text-[8px] border border-gray-600 text-gray-400">中心</button>
+                   <button onClick={() => selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], x: roomSize[0]*0.2 }))} className="px-0 py-1 text-[8px] border border-gray-600 text-gray-400">右中</button>
+                   <button onClick={() => selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], x: roomSize[0]*0.4 }))} className="px-0 py-1 text-[8px] border border-gray-600 text-gray-400">右(R)</button>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[8px] text-gray-400">Z-Axis (前后)</span>
+                <div className="grid grid-cols-2 gap-1 mb-1">
+                   <button onClick={() => selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], z: roomSize[2]*0.4 }))} className="p-1 text-[9px] border border-gray-600 text-gray-400">南 (前 Front)</button>
+                   <button onClick={() => selectedFixtureIds.forEach(id => updateFixturePos(id, { ...fixturePositions[id], z: -roomSize[2]*0.4 }))} className="p-1 text-[9px] border border-gray-600 text-gray-400">北 (后 Back)</button>
+                </div>
               </div>
            </div>
 
@@ -428,18 +483,18 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                   Snap to Grid
                 </label>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-[9px]">
-                <div>
-                  <label className="text-cyan-600 mb-1 block">W (X)</label>
-                  <input type="number" step="0.5" value={roomSize[0]} onChange={e => updateRoomSize([Number(e.target.value), roomSize[1], roomSize[2]])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
+              <div className="flex flex-col gap-2 text-[9px]">
+                <div className="flex items-center justify-between">
+                  <label className="text-cyan-600 block text-left">左右(东西 Width)</label>
+                  <input type="number" step="0.5" value={roomSize[0]} onChange={e => updateRoomSize([Number(e.target.value), roomSize[1], roomSize[2]])} className="w-16 bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center font-mono" />
                 </div>
-                <div>
-                  <label className="text-cyan-600 mb-1 block">H (Y)</label>
-                  <input type="number" step="0.5" value={roomSize[1]} onChange={e => updateRoomSize([roomSize[0], Number(e.target.value), roomSize[2]])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
+                <div className="flex items-center justify-between">
+                  <label className="text-cyan-600 block text-left">上下(高度 Height)</label>
+                  <input type="number" step="0.5" value={roomSize[1]} onChange={e => updateRoomSize([roomSize[0], Number(e.target.value), roomSize[2]])} className="w-16 bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center font-mono" />
                 </div>
-                <div>
-                  <label className="text-cyan-600 mb-1 block">D (Z)</label>
-                  <input type="number" step="0.5" value={roomSize[2]} onChange={e => updateRoomSize([roomSize[0], roomSize[1], Number(e.target.value)])} className="w-full bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center" />
+                <div className="flex items-center justify-between">
+                  <label className="text-cyan-600 block text-left">前后(南北 Depth)</label>
+                  <input type="number" step="0.5" value={roomSize[2]} onChange={e => updateRoomSize([roomSize[0], roomSize[1], Number(e.target.value)])} className="w-16 bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center font-mono" />
                 </div>
               </div>
            </div>
