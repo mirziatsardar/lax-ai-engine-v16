@@ -17,6 +17,8 @@ export class DMXEngine {
   public isRandomMode = true;
   
   public globalPrism: boolean | 'auto' = 'auto';
+  public prism1Type: 'beam' | '10pt' | '64pt' | '128pt' = '64pt';
+  public prism1RotSpeed: 'stop' | 'fast_r' | 'slow_r' | 'slow_l' | 'fast_l' | 'auto' = 'auto';
   
   public planModeActive = false;
   // fixtureId (universe_addr) -> override config
@@ -303,12 +305,42 @@ export class DMXEngine {
       let finalGobo = prismActive ? 0 : ((this.goboIdx % 16) * 6);
       
       // BEAM 295W Prism1: 0-63 beam, 64-127 10-pt, 128-191 64-pt, 192-255 128-pt
-      let finalPrism1 = prismActive ? 150 : 0;
+      let finalPrism1 = 0;
+      if (prismActive) {
+         if (this.globalPrism !== 'auto' && this.globalPrism === true) {
+            // When manually ON, respect the manual prism type. When 'auto', default to 64pt.
+            switch(this.prism1Type) {
+               case 'beam': finalPrism1 = 0; break;
+               case '10pt': finalPrism1 = 95; break;
+               case '64pt': finalPrism1 = 160; break;
+               case '128pt': finalPrism1 = 225; break;
+            }
+         } else {
+            // Auto mode -> defaults to 64-pt for visual effect
+            finalPrism1 = 160;
+         }
+      }
       
       // BEAM 295W Prism1Rot: 0-127 stop, 128-165 fast R, 166-191 slow R, 192-200 slow L, 200-255 fast L
       let finalPrism1Rot = 0;
       if (prismActive && !isChillMode) {
-        finalPrism1Rot = Math.sin(this.currentPhase) > 0 ? 140 : 210;
+         const rotVal = (speed: typeof this.prism1RotSpeed) => {
+            switch(speed) {
+               case 'stop': return 0;
+               case 'fast_r': return 145;
+               case 'slow_r': return 180;
+               case 'slow_l': return 195;
+               case 'fast_l': return 230;
+               default: return 0;
+            }
+         };
+         
+         if (this.globalPrism === true && this.prism1RotSpeed !== 'auto') {
+            finalPrism1Rot = rotVal(this.prism1RotSpeed);
+         } else {
+            // Auto mapping
+            finalPrism1Rot = Math.sin(this.currentPhase) > 0 ? 145 : 230; 
+         }
       }
 
       let finalPrism2 = prismActive && climaxMode ? 255 : 0;

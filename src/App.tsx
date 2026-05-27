@@ -289,14 +289,18 @@ export default function App() {
     dimmer: string,
     phase: string,
     isRandom: boolean,
-    globalPrism: boolean | 'auto'
+    globalPrism: boolean | 'auto',
+    prism1Type: string,
+    prism1RotSpeed: string
   }>({
     move: "circle",
     color: "rainbow",
     dimmer: "sync",
     phase: "gradient",
     isRandom: true,
-    globalPrism: "auto"
+    globalPrism: "auto",
+    prism1Type: "64pt",
+    prism1RotSpeed: "auto"
   });
 
   // Settings
@@ -370,7 +374,9 @@ export default function App() {
         dimmer: dmxEngine.currentDimmerMode,
         phase: dmxEngine.currentPhaseMode,
         isRandom: dmxEngine.isRandomMode,
-        globalPrism: dmxEngine.globalPrism
+        globalPrism: dmxEngine.globalPrism,
+        prism1Type: dmxEngine.prism1Type,
+        prism1RotSpeed: dmxEngine.prism1RotSpeed
       });
     }, 100);
     return () => clearInterval(timer);
@@ -502,7 +508,9 @@ export default function App() {
           dimmer: dmxEngine.currentDimmerMode,
           phase: dmxEngine.currentPhaseMode,
           isRandom: dmxEngine.isRandomMode,
-          globalPrism: dmxEngine.globalPrism
+          globalPrism: dmxEngine.globalPrism,
+          prism1Type: dmxEngine.prism1Type,
+          prism1RotSpeed: dmxEngine.prism1RotSpeed
         });
 
         // Throttled sending (~40fps)
@@ -1129,7 +1137,7 @@ export default function App() {
               ))}
 
               <h3 className="text-[10px] uppercase tracking-widest text-[#00f2ff] mt-6 mb-2 border-b border-cyan/20 pb-1">Prism (棱镜状态)</h3>
-              <div className="flex gap-1 text-[9px] font-mono">
+              <div className="flex gap-1 text-[9px] font-mono mb-2">
                 {(['auto', true, false] as const).map(p => (
                   <button
                     key={String(p)}
@@ -1143,6 +1151,58 @@ export default function App() {
                   </button>
                 ))}
               </div>
+
+              {dmxEngine.globalPrism === true && (
+                 <div className="flex flex-col gap-2 p-2 border border-purple-500/20 bg-purple-500/5 mb-4">
+                    <div className="flex justify-between items-center text-[8px] text-purple-400 uppercase tracking-widest mb-1">
+                      <span>Prism Type</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 text-[8px] font-mono">
+                      {[
+                        { id: 'beam', label: 'Beam(光束)' },
+                        { id: '10pt', label: '10-Pt' },
+                        { id: '64pt', label: '64-Pt' },
+                        { id: '128pt', label: '128-Pt' }
+                      ].map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            dmxEngine.prism1Type = p.id as any;
+                            setEngineState(s => ({ ...s, prism1Type: p.id }));
+                          }}
+                          className={`p-1 border uppercase transition-all truncate ${dmxEngine.prism1Type === p.id ? "bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]" : "border-gray-700 text-gray-500 hover:border-gray-500"}`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-between items-center text-[8px] text-purple-400 uppercase tracking-widest mt-2 mb-1">
+                      <span>Rotation Speed</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-[8px] font-mono">
+                      {[
+                        { id: 'auto', label: 'Auto' },
+                        { id: 'stop', label: 'Stop' },
+                        { id: 'fast_r', label: 'Fast R' },
+                        { id: 'slow_r', label: 'Slow R' },
+                        { id: 'slow_l', label: 'Slow L' },
+                        { id: 'fast_l', label: 'Fast L' },
+                      ].map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            dmxEngine.prism1RotSpeed = p.id as any;
+                            setEngineState(s => ({ ...s, prism1RotSpeed: p.id }));
+                          }}
+                          className={`p-1 border uppercase transition-all truncate ${dmxEngine.prism1RotSpeed === p.id ? "bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]" : "border-gray-700 text-gray-500 hover:border-gray-500"}`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                 </div>
+              )}
             </div>
 
             <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mt-6 mb-4 border-b border-cyan/20 pb-2">{t.phase_offsets}</h3>

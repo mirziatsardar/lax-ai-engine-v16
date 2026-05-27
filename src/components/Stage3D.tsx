@@ -23,6 +23,7 @@ interface Fixture3DPosition {
   rx?: number;
   ry?: number;
   rz?: number;
+  baseYawOffset?: number;
 }
 
 export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
@@ -145,6 +146,16 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
           dz = vec.z;
        }
 
+       if (pos.baseYawOffset) {
+          const yawRad = (pos.baseYawOffset * Math.PI) / 180;
+          const eulerYaw = new THREE.Euler(0, -yawRad, 0, 'XYZ');
+          const vec = new THREE.Vector3(dx, dy, dz);
+          vec.applyEuler(eulerYaw);
+          dx = vec.x;
+          dy = vec.y;
+          dz = vec.z;
+       }
+
        const distSum = Math.sqrt(dx*dx + dy*dy + dz*dz);
        if (distSum === 0) return;
 
@@ -218,6 +229,7 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
          rx: newPos.rx ?? prev[id]?.rx ?? 0,
          ry: newPos.ry ?? prev[id]?.ry ?? 0,
          rz: newPos.rz ?? prev[id]?.rz ?? 0,
+         baseYawOffset: newPos.baseYawOffset ?? prev[id]?.baseYawOffset ?? 0,
        };
        const next = { ...prev, [id]: clamped };
        localStorage.setItem('lax_fixture_pos_3d', JSON.stringify(next));
@@ -355,9 +367,30 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
         </div>
 
         {/* Right Side: Options */}
-        <div className="w-64 flex flex-col gap-4 overflow-auto">
+        <div className="w-64 flex flex-col gap-4 overflow-auto pb-4 pr-1">
            
-           <div className="border border-cyan/20 p-3 bg-black">
+           <div className="border border-cyan/20 p-3 bg-black flex flex-col gap-2 shrink-0">
+              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fixture List(设备列表)</h3>
+              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto pr-1">
+                {movableFixtures.map(f => (
+                  <button 
+                    key={f.id}
+                    onClick={(e) => {
+                       if (e.shiftKey) {
+                           setSelectedFixtureIds(prev => prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]);
+                       } else {
+                           setSelectedFixtureIds([f.id]);
+                       }
+                    }}
+                    className={`text-left px-2 py-1.5 text-[9px] border transition-colors truncate shrink-0 ${selectedFixtureIds.includes(f.id) ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-800 text-gray-400 hover:border-cyan/50 hover:bg-cyan/10'}`}
+                  >
+                    U{f.universe}.{f.addr} - {f.name}
+                  </button>
+                ))}
+              </div>
+           </div>
+
+           <div className="border border-cyan/20 p-3 bg-black shrink-0">
               <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Base Direction (安装方向)</h3>
               <div className="grid grid-cols-2 gap-2">
                 <button 
@@ -420,6 +453,33 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                 >
                   WEST (西/向左)
                 </button>
+              </div>
+
+              <div className="mt-3">
+                 <div className="flex justify-between text-[9px] text-gray-400 mb-1">
+                    <span>Base Yaw Offset (底座偏航角校准)</span>
+                    <span>{selectedFixtureIds.length > 0 ? (fixturePositions[selectedFixtureIds[0]]?.baseYawOffset || 0) : 0}°</span>
+                 </div>
+                 <input 
+                    type="range" 
+                    min="-180" 
+                    max="180" 
+                    step="1"
+                    value={selectedFixtureIds.length > 0 ? (fixturePositions[selectedFixtureIds[0]]?.baseYawOffset || 0) : 0}
+                    onChange={(e) => {
+                       const val = Number(e.target.value);
+                       selectedFixtureIds.forEach(id => {
+                          updateFixturePos(id, { ...fixturePositions[id], baseYawOffset: val });
+                       });
+                    }}
+                    className="w-full h-1 accent-cyan-500 bg-gray-700 outline-none"
+                    disabled={selectedFixtureIds.length === 0}
+                 />
+                 <div className="flex justify-between text-[8px] text-gray-600 mt-1">
+                    <span>-180°</span>
+                    <span>0°</span>
+                    <span>+180°</span>
+                 </div>
               </div>
            </div>
 
@@ -496,27 +556,6 @@ export function Stage3D({ fixtures, engine, onClose }: Stage3DProps) {
                   <label className="text-cyan-600 block text-left">前后(南北 Depth)</label>
                   <input type="number" step="0.5" value={roomSize[2]} onChange={e => updateRoomSize([roomSize[0], roomSize[1], Number(e.target.value)])} className="w-16 bg-cyan-900/20 border border-cyan/30 text-white p-1 text-center font-mono" />
                 </div>
-              </div>
-           </div>
-
-           <div className="border border-cyan/20 p-3 bg-black flex flex-col gap-2 max-h-48 overflow-y-auto">
-              <h3 className="text-[10px] text-gray-500 uppercase tracking-widest font-bold sticky top-0 bg-black py-1 z-10">Fixture List(设备列表)</h3>
-              <div className="flex flex-col gap-1">
-                {movableFixtures.map(f => (
-                  <button 
-                    key={f.id}
-                    onClick={(e) => {
-                       if (e.shiftKey) {
-                           setSelectedFixtureIds(prev => prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]);
-                       } else {
-                           setSelectedFixtureIds([f.id]);
-                       }
-                    }}
-                    className={`text-left px-2 py-1.5 text-[9px] border transition-colors truncate ${selectedFixtureIds.includes(f.id) ? 'bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]' : 'border-gray-800 text-gray-400 hover:border-cyan/50 hover:bg-cyan/10'}`}
-                  >
-                    U{f.universe}.{f.addr} - {f.name}
-                  </button>
-                ))}
               </div>
            </div>
 
@@ -684,6 +723,11 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGr
   const targetPoint = new THREE.Vector3(pos.x + dirX * distance, pos.y + dirY * distance, pos.z + dirZ * distance);
   const points = [new THREE.Vector3(pos.x, pos.y, pos.z), targetPoint];
 
+  const qBase = new THREE.Quaternion().setFromEuler(new THREE.Euler(pos.rx || 0, pos.ry || 0, pos.rz || 0, 'XYZ'));
+  const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ((pos.baseYawOffset || 0) * Math.PI) / 180);
+  qBase.multiply(qYaw);
+  const eFinal = new THREE.Euler().setFromQuaternion(qBase);
+
   return (
     <>
       {isSelected && (
@@ -701,6 +745,7 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGr
                   rx: pos.rx,
                   ry: pos.ry,
                   rz: pos.rz,
+                  baseYawOffset: pos.baseYawOffset,
                 });
               }
            }}
@@ -709,7 +754,7 @@ function FixtureNode({ fixture, idx, pos, isSelected, isOverrideActive, snapToGr
       <mesh 
         ref={meshRef} 
         position={[pos.x, pos.y, pos.z]} 
-        rotation={[pos.rx || 0, pos.ry || 0, pos.rz || 0]}
+        rotation={eFinal}
         onClick={onClick}
       >
         <boxGeometry args={[0.3, 0.3, 0.3]} />
