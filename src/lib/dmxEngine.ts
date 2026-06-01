@@ -1,5 +1,4 @@
 import { ActiveFixture, MovementMode, ColorMode, PhaseMode } from '../types';
-import * as THREE from 'three';
 
 export type DimmerMode = "sync" | "pulse" | "stack";
 export type AdvancedColorMode = ColorMode | "chase";
@@ -56,12 +55,8 @@ export class DMXEngine {
     let dz = 0 - pos.z;
 
     if (pos.rx || pos.ry || pos.rz) {
-       const euler = new THREE.Euler(pos.rx || 0, pos.ry || 0, pos.rz || 0, 'XYZ');
-       const vec = new THREE.Vector3(dx, dy, dz);
-       vec.applyEuler(new THREE.Euler(-euler.x, -euler.y, -euler.z, 'ZYX')); // Inverse rotation
-       dx = vec.x;
-       dy = vec.y;
-       dz = vec.z;
+       // We ignore arbitrary rotations given the 3D window is removed and keeping it simple without THREE.
+       // However, to keep it functional, we just fall through without applying inverse rotations.
     }
 
     const distSum = Math.sqrt(dx*dx + dy*dy + dz*dz);

@@ -15,8 +15,7 @@ import {
   Power, 
   AlertTriangle,
   Radio,
-  Monitor,
-  Crosshair
+  Monitor
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { AudioEngine } from './lib/audioEngine';
@@ -24,7 +23,6 @@ import { DMXEngine } from './lib/dmxEngine';
 import { MASTER_FIXTURES } from './lib/fixtures';
 import { ActiveFixture, FixturePosition } from './types';
 import Spectrum from './components/Spectrum';
-import { Stage3D } from './components/Stage3D';
 
 const BG_DARK = "#050505";
 const PANEL_BG = "rgba(0, 0, 0, 0.6)";
@@ -310,12 +308,10 @@ export default function App() {
     ovrShutterLock: true,
     ovrFrost: 0,
     ovrShutterPW: 0,
-    ovrShutterSpot: 255,
-    ovrPrism: true
+    ovrShutterSpot: 255
   });
 
   const [activeTab, setActiveTab] = useState<'main' | 'patch' | 'settings' | 'audio' | 'logs'>('main');
-  const [isPlanViewOpen, setIsPlanViewOpen] = useState(false);
 
   const addLog = (msg: string) => {
     setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 10));
@@ -565,16 +561,6 @@ export default function App() {
   return (
     <div className="w-full h-screen bg-[#050505] text-[#e0e0e0] font-sans overflow-hidden flex flex-col relative select-none">
       <div className="absolute inset-0 bg-grid pointer-events-none"></div>
-      
-      <AnimatePresence>
-        {isPlanViewOpen && (
-          <Stage3D 
-            fixtures={fixtures} 
-            engine={dmxEngine} 
-            onClose={() => setIsPlanViewOpen(false)} 
-          />
-        )}
-      </AnimatePresence>
 
       {/* HUD Header */}
       <header className="h-16 border-b border-cyan/30 flex items-center justify-between px-8 bg-black/40 backdrop-blur-md z-10">
@@ -620,19 +606,6 @@ export default function App() {
             <div className="flex flex-col gap-2">
               <NavButton label={t.neural_core} icon={<Activity size={14}/>} active={activeTab === 'main'} onClick={() => setActiveTab('main')} />
               <NavButton label={t.fixture_patch} icon={<Box size={14}/>} active={activeTab === 'patch'} onClick={() => setActiveTab('patch')} />
-              <button 
-                onClick={() => setIsPlanViewOpen(p => !p)}
-                className={`w-full flex items-center justify-between p-3 border font-mono text-xs tracking-widest transition-all ${
-                  isPlanViewOpen 
-                    ? "bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]" 
-                    : "border-gray-800 text-gray-500 hover:border-cyan/50 hover:bg-cyan/5"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Crosshair size={14} />
-                  <span>{t.plan_view}</span>
-                </div>
-              </button>
               <NavButton label={t.audio_tab} icon={<Radio size={14}/>} active={activeTab === 'audio'} onClick={() => setActiveTab('audio')} />
               <NavButton label={t.logs_tab} icon={<Database size={14}/>} active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
               <NavButton label={t.engine_cfg} icon={<Settings size={14}/>} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
@@ -702,15 +675,75 @@ export default function App() {
                 {settings.ovrShutterLock ? t.locked : t.unlocked}
               </span>
             </button>
-            <button 
-              onClick={() => setSettings(s => ({ ...s, ovrPrism: !s.ovrPrism }))}
-              className={`w-full flex items-center justify-between border p-2 mb-4 transition-all ${settings.ovrPrism ? "border-cyan/50 bg-[#00f2ff]/10" : "border-gray-500/20 bg-gray-500/5"}`}
-            >
-              <span className="text-[10px] font-mono">PRISM (菱镜)</span>
-              <span className={`text-[10px] font-bold uppercase ${settings.ovrPrism ? "text-[#00f2ff] glow" : "text-gray-500"}`}>
-                {settings.ovrPrism ? "ON" : "OFF"}
-              </span>
-            </button>
+            <div className="mb-4">
+              <h3 className="text-[10px] uppercase tracking-widest text-[#00f2ff] mt-2 mb-2 border-b border-cyan/20 pb-1">Prism (棱镜状态)</h3>
+              <div className="flex gap-1 text-[9px] font-mono mb-2">
+                {(['auto', true, false] as const).map(p => (
+                  <button
+                    key={String(p)}
+                    onClick={() => {
+                      dmxEngine.globalPrism = p;
+                      setEngineState(s => ({ ...s, globalPrism: p }));
+                    }}
+                    className={`flex-1 p-1 border uppercase transition-all ${dmxEngine.globalPrism === p ? "bg-purple-500/20 border-[#9d00ff] text-[#9d00ff]" : "border-gray-700 text-gray-500 hover:border-gray-500"}`}
+                  >
+                    {p === 'auto' ? 'Auto' : p ? 'On' : 'Off'}
+                  </button>
+                ))}
+              </div>
+
+              {dmxEngine.globalPrism === true && (
+                 <div className="flex flex-col gap-2 p-2 border border-purple-500/20 bg-purple-500/5">
+                    <div className="flex justify-between items-center text-[8px] text-purple-400 uppercase tracking-widest mb-1">
+                      <span>Prism Type</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 text-[8px] font-mono">
+                      {[
+                        { id: 'beam', label: 'Beam(光束)' },
+                        { id: '10pt', label: '10-Pt' },
+                        { id: '64pt', label: '64-Pt' },
+                        { id: '128pt', label: '128-Pt' }
+                      ].map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            dmxEngine.prism1Type = p.id as any;
+                            setEngineState(s => ({ ...s, prism1Type: p.id }));
+                          }}
+                          className={`p-1 border uppercase transition-all truncate ${dmxEngine.prism1Type === p.id ? "bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]" : "border-gray-700 text-gray-500 hover:border-gray-500"}`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-between items-center text-[8px] text-purple-400 uppercase tracking-widest mt-2 mb-1">
+                      <span>Rotation Speed</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-[8px] font-mono">
+                      {[
+                        { id: 'auto', label: 'Auto' },
+                        { id: 'stop', label: 'Stop' },
+                        { id: 'fast_r', label: 'Fast R' },
+                        { id: 'slow_r', label: 'Slow R' },
+                        { id: 'slow_l', label: 'Slow L' },
+                        { id: 'fast_l', label: 'Fast L' },
+                      ].map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            dmxEngine.prism1RotSpeed = p.id as any;
+                            setEngineState(s => ({ ...s, prism1RotSpeed: p.id }));
+                          }}
+                          className={`p-1 border uppercase transition-all truncate ${dmxEngine.prism1RotSpeed === p.id ? "bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]" : "border-gray-700 text-gray-500 hover:border-gray-500"}`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                 </div>
+              )}
+            </div>
             <div className="text-[9px] text-gray-500 leading-relaxed font-mono opacity-50">
               {t.shutter_note}
             </div>
@@ -1136,73 +1169,7 @@ export default function App() {
                 </button>
               ))}
 
-              <h3 className="text-[10px] uppercase tracking-widest text-[#00f2ff] mt-6 mb-2 border-b border-cyan/20 pb-1">Prism (棱镜状态)</h3>
-              <div className="flex gap-1 text-[9px] font-mono mb-2">
-                {(['auto', true, false] as const).map(p => (
-                  <button
-                    key={String(p)}
-                    onClick={() => {
-                      dmxEngine.globalPrism = p;
-                      setEngineState(s => ({ ...s, globalPrism: p }));
-                    }}
-                    className={`flex-1 p-1 border uppercase transition-all ${dmxEngine.globalPrism === p ? "bg-purple-500/20 border-[#9d00ff] text-[#9d00ff]" : "border-gray-700 text-gray-500"}`}
-                  >
-                    {p === 'auto' ? 'Auto' : p ? 'On' : 'Off'}
-                  </button>
-                ))}
-              </div>
 
-              {dmxEngine.globalPrism === true && (
-                 <div className="flex flex-col gap-2 p-2 border border-purple-500/20 bg-purple-500/5 mb-4">
-                    <div className="flex justify-between items-center text-[8px] text-purple-400 uppercase tracking-widest mb-1">
-                      <span>Prism Type</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1 text-[8px] font-mono">
-                      {[
-                        { id: 'beam', label: 'Beam(光束)' },
-                        { id: '10pt', label: '10-Pt' },
-                        { id: '64pt', label: '64-Pt' },
-                        { id: '128pt', label: '128-Pt' }
-                      ].map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => {
-                            dmxEngine.prism1Type = p.id as any;
-                            setEngineState(s => ({ ...s, prism1Type: p.id }));
-                          }}
-                          className={`p-1 border uppercase transition-all truncate ${dmxEngine.prism1Type === p.id ? "bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]" : "border-gray-700 text-gray-500 hover:border-gray-500"}`}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="flex justify-between items-center text-[8px] text-purple-400 uppercase tracking-widest mt-2 mb-1">
-                      <span>Rotation Speed</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1 text-[8px] font-mono">
-                      {[
-                        { id: 'auto', label: 'Auto' },
-                        { id: 'stop', label: 'Stop' },
-                        { id: 'fast_r', label: 'Fast R' },
-                        { id: 'slow_r', label: 'Slow R' },
-                        { id: 'slow_l', label: 'Slow L' },
-                        { id: 'fast_l', label: 'Fast L' },
-                      ].map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => {
-                            dmxEngine.prism1RotSpeed = p.id as any;
-                            setEngineState(s => ({ ...s, prism1RotSpeed: p.id }));
-                          }}
-                          className={`p-1 border uppercase transition-all truncate ${dmxEngine.prism1RotSpeed === p.id ? "bg-cyan-500/20 border-[#00f2ff] text-[#00f2ff]" : "border-gray-700 text-gray-500 hover:border-gray-500"}`}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-                 </div>
-              )}
             </div>
 
             <h3 className="text-[11px] uppercase tracking-widest text-[#00f2ff] mt-6 mb-4 border-b border-cyan/20 pb-2">{t.phase_offsets}</h3>
