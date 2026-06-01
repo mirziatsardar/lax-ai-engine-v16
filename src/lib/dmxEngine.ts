@@ -23,56 +23,24 @@ export class DMXEngine {
   // fixtureId (universe_addr) -> override config
   public planOverrides: Record<string, { active: boolean, pan: number, tilt: number, frost: boolean, color?: number, gobo?: number }> = {};
   
-  public roomSize: [number, number, number] = [10, 5, 10];
-  private fixturePosCache: Record<string, any> = {};
-  private lastCacheTime = 0;
-
   private fixtureStates: Record<string, { pan16: number, tilt16: number, dimmer: number }> = {};
   private goboIdx = 0;
   private colorIdx = 0;
 
   constructor() {
-    this.refresh3DPositions();
   }
 
-  private refresh3DPositions() {
-    try {
-      const sp = localStorage.getItem('lax_fixture_pos_3d');
-      if (sp) this.fixturePosCache = JSON.parse(sp);
-      const sr = localStorage.getItem('lax_room_size_3d');
-      if (sr) this.roomSize = JSON.parse(sr);
-    } catch(e) {}
-    this.lastCacheTime = Date.now();
-  }
-
-  private getCenterAim(fixtureId: string): { pan: number, tilt: number } {
-    const pos = this.fixturePosCache[fixtureId];
-    if (!pos) return { pan: 32768, tilt: 32768 };
-
-    // Target is somewhat to the center of the room, maybe slightly lifted
-    let dx = 0 - pos.x;
-    let dy = (this.roomSize[1] * 0.2) - pos.y;
-    let dz = 0 - pos.z;
-
-    if (pos.rx || pos.ry || pos.rz) {
-       // We ignore arbitrary rotations given the 3D window is removed and keeping it simple without THREE.
-       // However, to keep it functional, we just fall through without applying inverse rotations.
+  private getCenterAim(position: string): { pan: number, tilt: number } {
+    switch (position) {
+      case 'Floor_Left': return { pan: 40000, tilt: 25000 };
+      case 'Floor_Right': return { pan: 25000, tilt: 25000 };
+      case 'Ceiling_Left': return { pan: 40000, tilt: 40000 };
+      case 'Ceiling_Right': return { pan: 25000, tilt: 40000 };
+      case 'Wall_Left': return { pan: 45000, tilt: 32768 };
+      case 'Wall_Right': return { pan: 20000, tilt: 32768 };
+      case 'Center':
+      default: return { pan: 32768, tilt: 32768 };
     }
-
-    const distSum = Math.sqrt(dx*dx + dy*dy + dz*dz);
-    if (distSum === 0) return { pan: 32768, tilt: 32768 };
-
-    // Default base is -Y
-    let baseBeta = Math.acos(-dy / distSum); 
-    let alphaA = Math.atan2(-dz, dx);
-    // Unmapped:
-    const panNorm = (alphaA / (Math.PI * 3)) + 0.5;
-    const tiltNorm = baseBeta / (Math.PI * 1.5);
-
-    return { 
-      pan: Math.max(0, Math.min(65535, Math.floor(panNorm * 65535))), 
-      tilt: Math.max(0, Math.min(65535, Math.floor(tiltNorm * 65535))) 
-    };
   }
 
   update(
@@ -92,9 +60,6 @@ export class DMXEngine {
     },
     isSilence: boolean = false
   ): Record<number, number[]> {
-    if (Date.now() - this.lastCacheTime > 2000) {
-      this.refresh3DPositions();
-    }
     const universes: Record<number, number[]> = {};
     
     const effectiveEnergy = isSilence ? 0 : energy;
@@ -183,7 +148,7 @@ export class DMXEngine {
       else if (this.currentPhaseMode === "odd_even_offset") phaseOffset = idx % 2 === 0 ? Math.PI : 0;
 
       // Motion Logic from Python
-      const centerAim = this.getCenterAim(fix.id);
+      const centerAim = this.getCenterAim(fix.position);
       let targetPan16 = centerAim.pan;
       let targetTilt16 = centerAim.tilt;
       const ampP = isChillMode ? 10000 : 20000;
