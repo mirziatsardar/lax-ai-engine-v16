@@ -21,24 +21,19 @@ async function startServer() {
   const PORT = 3000;
   const udpClient = dgram.createSocket("udp4");
   
-  // Art-Net and sACN controllers should ideally send from standard ports
-  udpClient.bind(6454, "0.0.0.0", () => {
+  // Bind to ephemeral port since we only send out
+  udpClient.bind(0, "0.0.0.0", () => {
     udpClient.setBroadcast(true);
     try {
       // sACN Multicast needs a higher TTL to jump through routers/switches
       udpClient.setMulticastTTL(64);
       udpClient.setMulticastLoopback(true);
     } catch(e) { /* Some OS might not allow this without admin */ }
-    console.log("UDP DMX Relay Socket Active on Port 6454");
+    console.log("UDP DMX Relay Socket Active");
   });
 
   udpClient.on('error', (err) => {
-    if ((err as any).code === 'EADDRINUSE') {
-      console.log("Port 6454 in use, falling back to ephemeral port...");
-      udpClient.bind(0);
-    } else {
-      console.error("UDP Socket Error:", err);
-    }
+    console.error("UDP Socket Error:", err);
   });
 
   const sacnSequences: Record<number, number> = {};
